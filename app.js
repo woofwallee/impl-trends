@@ -162,6 +162,7 @@ function applyImport(store, records, snap) {
     store.m2 = { all: m2History(records), "CAREpoint": m2History(byType("CAREpoint")), "e-Bridge": m2History(byType("e-Bridge")) };
     store.stageDaily = { all: buildStageDaily(records), "CAREpoint": buildStageDaily(byType("CAREpoint")), "e-Bridge": buildStageDaily(byType("e-Bridge")) };
     store.pendingClose = pendingClose(records, snap);
+    store.pendingDaily = pendingDaily(records);
     store.asOfMonth = snap;
   }
   store.lastImport = { month: snap, records: records.length, when: new Date().toISOString(), older: !!older };
@@ -278,16 +279,28 @@ function render(store) {
   const speedPrevV = m2prevKeys.length ? Math.round(mean(m2prevKeys.map(k => m2c[k]))) : null;
   const speedDelta = (priorHasData && speedTo != null && speedPrevV != null) ? speedTo - speedPrevV : null;
 
-  // KPIs — always show total + both cohorts; deltas compare against the end of the prior equal-length window
+  // KPIs — levels measured at the END of the selected period; deltas vs the end of the prior equal-length window
   const totalDelta = prevRow ? cur.total - prevRow.total : null;
+  const stockFoot = "open at end of period · vs prior period";
   const kpis = [
-    { label: "Open implementations (backlog)", icon: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>', val: cur.total, pill: pill(totalDelta, true), foot: prevLbl ? "vs prior period" : "open now" },
-    { label: "CAREpoint open", icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/>', val: cur["CAREpoint"] || 0, pill: pill(prevRow ? (cur["CAREpoint"] || 0) - (prevRow["CAREpoint"] || 0) : null, true), foot: "vs prior period" },
-    { label: "e-Bridge open", icon: '<path d="M4 7h16M4 12h16M4 17h10"/>', val: cur["e-Bridge"] || 0, pill: pill(prevRow ? (cur["e-Bridge"] || 0) - (prevRow["e-Bridge"] || 0) : null, true), foot: "vs prior period" },
-    (() => { const pc = store.pendingClose || []; const stale = pc.filter(p => p.days > 30).length; const worst = pc.length ? pc[0].days : 0;
-      return { label: "Live, pending close", icon: '<circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/>', val: pc.length,
-        pill: stale ? `<span class="pill bad">${stale} over 30d</span>` : (pc.length ? `<span class="pill flat">none stale</span>` : ""),
-        foot: pc.length ? `longest ${worst} days since live` : "no one waiting on close-out" }; })(),
+    { label: "Open implementations (backlog)", icon: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>', val: cur.total, pill: pill(totalDelta, true), foot: stockFoot },
+    { label: "CAREpoint open", icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/>', val: cur["CAREpoint"] || 0, pill: pill(prevRow ? (cur["CAREpoint"] || 0) - (prevRow["CAREpoint"] || 0) : null, true), foot: stockFoot },
+    { label: "e-Bridge open", icon: '<path d="M4 7h16M4 12h16M4 17h10"/>', val: cur["e-Bridge"] || 0, pill: pill(prevRow ? (cur["e-Bridge"] || 0) - (prevRow["e-Bridge"] || 0) : null, true), foot: stockFoot },
+    (() => {                                             // pending-close level at the window end (falls back to as-of-import for legacy stores)
+      const pd = store.pendingDaily || null, pc = store.pendingClose || [];
+      let curP = null, prevP = null, atLatest = true;
+      if (pd && pd.length) {
+        for (const p of pd) { if (p.date <= viewRange.to) curP = p; else break; }
+        if (priorHasData) for (const p of pd) { if (p.date <= pTo) prevP = p; else break; }
+        atLatest = !curP || curP.date === pd[pd.length - 1].date;
+      }
+      const val = curP ? curP.v : pc.length;
+      const delta = (curP && prevP) ? curP.v - prevP.v : null;
+      const stale = pc.filter(p => p.days > 30).length, worst = pc.length ? pc[0].days : 0;
+      return { label: "Live, pending close", icon: '<circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/>', val,
+        pill: pill(delta, true),
+        foot: atLatest ? (val ? (stale ? `${stale} over 30d · longest ${worst}d since live` : "none stale") : "no one waiting on close-out")
+                       : "at end of period · vs prior period" }; })(),
   ];
   document.getElementById("kpis").innerHTML = kpis.map(k => `<div class="card kpi">
     <div class="kl">${k.label}<span class="ki"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px">${k.icon}</svg></span></div>
@@ -555,6 +568,12 @@ function init() {
   ["fromDate", "toDate"].forEach(id =>
     document.getElementById(id).addEventListener("change", () => { const r = rangeFromInputs(); if (!r) return; viewRange.from = r.from; viewRange.to = r.to; document.querySelectorAll("#tfPresets button").forEach(x => x.classList.remove("on")); render(loadStore()); }));
   document.querySelectorAll("#tfPresets button").forEach(b => b.addEventListener("click", () => setTF(b.dataset.tf)));
+  document.getElementById("todayBtn").addEventListener("click", () => {
+    const n = new Date(); const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+    viewRange.to = today; if (viewRange.from && viewRange.from > today) viewRange.from = today;
+    document.querySelectorAll("#tfPresets button").forEach(x => x.classList.remove("on"));
+    render(loadStore());
+  });
   document.querySelectorAll("#cohortSel button").forEach(b => b.addEventListener("click", () => {
     cohort = b.dataset.c;
     document.querySelectorAll("#cohortSel button").forEach(x => x.classList.toggle("on", x === b));
