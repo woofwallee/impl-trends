@@ -310,7 +310,7 @@ function render(store) {
         foot: atLatest ? (val ? (stale ? `${stale} over 30d · longest ${worst}d since live` : "none stale") : "no one waiting on close-out")
                        : "at end of period · vs prior period" }; })(),
   ];
-  document.getElementById("kpis").innerHTML = kpis.map(k => `<div class="card kpi">
+  document.getElementById("kpis").innerHTML = kpis.map((k, i) => `<div class="card kpi" data-share="kpi-${i}">
     <div class="kl">${k.label}<span class="ki"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px">${k.icon}</svg></span></div>
     <div class="kv">${typeof k.val === "number" ? k.val.toLocaleString() : k.val} ${k.pill}</div><div class="kfoot">${k.foot}</div></div>`).join("");
 
@@ -466,11 +466,61 @@ function applyTheme(t) { document.documentElement.setAttribute("data-theme", t);
     : '<circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>'; }
 
 /* ---------- share ---------- */
+const SHARE_CARDS = [
+  { id: "kpi-0", label: "Open implementations (backlog) — number" },
+  { id: "kpi-1", label: "CAREpoint open — number" },
+  { id: "kpi-2", label: "e-Bridge open — number" },
+  { id: "kpi-3", label: "Live, pending close — number" },
+  { id: "sec-backlog", label: "Open pipeline trend (backlog)" },
+  { id: "sec-speed", label: "Time to go-live" },
+  { id: "sec-golive", label: "Go-lives per month" },
+  { id: "sec-stage", label: "Time in stage" },
+];
+function shareEl(id) { return id.startsWith("kpi-") ? document.querySelector(`[data-share="${id}"]`) : document.getElementById(id); }
+function shareSelection() { return [...document.querySelectorAll("#sharePick input:checked")].map(c => c.value); }
+
 function sharePNG() {
+  const sel = shareSelection();
+  if (!sel.length) { toast("Pick at least one card to share.", true); return; }
   const dark = document.documentElement.getAttribute("data-theme") === "dark";
-  html2canvas(document.getElementById("dashboard"), { backgroundColor: dark ? "#0e1320" : "#eef1f5", scale: 2, useCORS: true }).then(cv => {
-    const a = document.createElement("a"); a.href = cv.toDataURL("image/png"); a.download = "implementation-trends.png"; a.click();
+  const bg = dark ? "#0e1320" : "#eef1f5";
+  if (sel.length === SHARE_CARDS.length) {
+    html2canvas(document.getElementById("dashboard"), { backgroundColor: bg, scale: 2, useCORS: true }).then(cv => {
+      const a = document.createElement("a"); a.href = cv.toDataURL("image/png"); a.download = "implementation-trends.png"; a.click();
+    }).catch(() => toast("PNG export failed.", true));
+    return;
+  }
+  // Selected cards only: capture each, then stack them onto one canvas.
+  const els = sel.map(shareEl).filter(Boolean);
+  Promise.all(els.map(el => html2canvas(el, { backgroundColor: bg, scale: 2, useCORS: true }))).then(cvs => {
+    const PAD = 32, GAP = 24;
+    const w = Math.max(...cvs.map(c => c.width)) + PAD * 2;
+    const h = cvs.reduce((s, c) => s + c.height, 0) + GAP * (cvs.length - 1) + PAD * 2;
+    const out = document.createElement("canvas"); out.width = w; out.height = h;
+    const ctx = out.getContext("2d"); ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
+    let y = PAD; for (const c of cvs) { ctx.drawImage(c, PAD, y); y += c.height + GAP; }
+    const name = sel.length === 1
+      ? SHARE_CARDS.find(c => c.id === sel[0]).label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+      : "implementation-trends-selected";
+    const a = document.createElement("a"); a.href = out.toDataURL("image/png"); a.download = name + ".png"; a.click();
   }).catch(() => toast("PNG export failed.", true));
+}
+
+function sharePDF() {
+  const sel = shareSelection();
+  if (!sel.length) { toast("Pick at least one card to share.", true); return; }
+  if (sel.length === SHARE_CARDS.length) { window.print(); return; }
+  // Selected cards only: hide the rest while the print dialog is open.
+  document.body.classList.add("share-partial");
+  SHARE_CARDS.forEach(c => { const el = shareEl(c.id); if (el && !sel.includes(c.id)) el.classList.add("share-hide"); });
+  const cleanup = () => {
+    document.body.classList.remove("share-partial");
+    document.querySelectorAll(".share-hide").forEach(e => e.classList.remove("share-hide"));
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup);
+  window.print();
+  setTimeout(cleanup, 500);   // fallback for browsers that skip afterprint
 }
 
 /* ---------- import history (log of every import, with the raw file) ---------- */
@@ -572,7 +622,15 @@ function init() {
 
   document.getElementById("themeBtn").addEventListener("click", () => { applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark"); render(loadStore()); });
   document.getElementById("pngBtn").addEventListener("click", () => { closeMenus(); sharePNG(); });
-  document.getElementById("pdfBtn").addEventListener("click", () => { closeMenus(); window.print(); });
+  document.getElementById("pdfBtn").addEventListener("click", () => { closeMenus(); sharePDF(); });
+
+  // Share picker: choose which cards to include; "Full dashboard" mirrors all-checked.
+  document.getElementById("sharePick").innerHTML = SHARE_CARDS.map(c =>
+    `<label class="share-row"><input type="checkbox" value="${c.id}" checked> ${c.label}</label>`).join("");
+  const shareAll = document.getElementById("shareAll");
+  const shareBoxes = [...document.querySelectorAll("#sharePick input")];
+  shareAll.addEventListener("change", () => shareBoxes.forEach(b => b.checked = shareAll.checked));
+  shareBoxes.forEach(b => b.addEventListener("change", () => shareAll.checked = shareBoxes.every(x => x.checked)));
 
   document.getElementById("reset").addEventListener("click", () => { closeMenus(); if (confirm("Reset all data? This clears the stored history AND import log in this browser and cannot be undone. Back up first if unsure.")) { localStorage.removeItem(STORE_KEY); localStorage.removeItem(IMPORTS_KEY); localStorage.setItem("impl_trends_demo_off", "1"); location.reload(); } });
   document.getElementById("backup").addEventListener("click", () => { closeMenus();
