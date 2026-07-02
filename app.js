@@ -240,6 +240,14 @@ function miniSpark(vals, color) {
   return `<svg width="100" height="24" viewBox="0 0 100 24"><polyline points="${path}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="${X(last.i).toFixed(1)}" cy="${Y(last.v).toFixed(1)}" r="2.5" fill="${color}"/></svg>`;
 }
 
+function windowTrend(vals) {                             // direction of the visible line: end vs start, ±5% deadband
+  const v = vals.filter(x => x != null);
+  if (v.length < 2) return null;
+  const a = v[0], b = v[v.length - 1], base = Math.max(Math.abs(a), 1);
+  if (Math.abs(b - a) / base < 0.05) return { kind: "flat" };
+  return { kind: b > a ? "up" : "down" };
+}
+
 /* ---------- render ---------- */
 function render(store) {
   const dash = document.getElementById("dashboard"), empty = document.getElementById("empty");
@@ -310,6 +318,11 @@ function render(store) {
   document.getElementById("backlogNow").textContent = bl(cur).toLocaleString() + (cohort === "all" ? "" : "");
   document.querySelector("#sec-backlog h3").textContent = "Open pipeline trend (backlog)" + cohortLabel();
   document.getElementById("backlogPill").innerHTML = pill(backlogDelta, true) + (prevLbl ? ` <span style="font-size:12px;color:var(--hint)">vs ${prevLbl}</span>` : "");
+  const wt = windowTrend(win.map(bl));
+  document.getElementById("backlogTrend").innerHTML = !wt ? "" :
+    wt.kind === "up" ? `<span class="pill bad" style="font-size:13px;padding:3px 10px">&#9650; Rising over this period</span>` :
+    wt.kind === "down" ? `<span class="pill good" style="font-size:13px;padding:3px 10px">&#9660; Falling over this period</span>` :
+    `<span class="pill flat" style="font-size:13px;padding:3px 10px">&#9644; Flat over this period</span>`;
   areaChart("backlogChart", win.map(r => ({ m: r.date, v: bl(r) })), 220, fmtDay);
 
   // go-lives per month — window bars + prior-period comparison
