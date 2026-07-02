@@ -98,6 +98,10 @@
   .colhdr .r{text-align:right}
   .mktsum{display:flex;gap:14px;font-size:12px;color:var(--muted)}
   .mktsum b{font-weight:600}
+  .pend-row{display:grid;grid-template-columns:1fr auto auto auto;gap:14px;align-items:center;padding:10px 4px;border-top:1px solid var(--line2);font-size:13.5px}
+  .pend-row:first-child{border-top:none}
+  .pend-row .pn{font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pend-row .pm{color:var(--muted);white-space:nowrap;font-size:12.5px}
   .hist-row{display:grid;grid-template-columns:1fr auto auto auto;gap:14px;align-items:center;padding:13px 4px;border-top:1px solid var(--line2)}
   .hist-row:first-child{border-top:none}
   .hist-row .hf{font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -235,6 +239,11 @@
           <div class="canvas-wrap" style="height:240px"><canvas id="speedChart"></canvas></div>
           <div id="speedCap" style="font-size:12px;color:var(--muted);margin-top:12px"></div>
         </div>
+      </section>
+
+      <section class="card" id="sec-pending" style="margin-bottom:16px">
+        <div class="row-h"><div><h3>Live, pending close</h3><p class="ch-sub">Customer is live but the record hasn't been moved to Implementation Live/Complete — review anything sitting here too long</p></div><div id="pendPill"></div></div>
+        <div id="pendList" style="margin-top:8px"></div>
       </section>
 
       <section class="card" id="sec-stage" style="margin-bottom:16px">

@@ -71,10 +71,14 @@ function normalize(rows) { const C = CONFIG.columns;
       const en = parseDate(r[`Date entered "${s} (Implementation Pipeline)"`]);
       if (en) intervals[s] = { enter: en, exit: parseDate(r[`Date exited "${s} (Implementation Pipeline)"`]) };
     }
+    const stage = (r[C.current_stage] || "").trim();
+    // Authoritative signals: went live = the date property; exited pipeline = the stage move
+    // (timestamped by HubSpot's stage-entry date; fall back to the live date for legacy rows).
+    const closedDate = (intervals[LIVE_STAGE] && intervals[LIVE_STAGE].enter) || (stage === LIVE_STAGE ? live : null);
     return { id: (r[C.record_id] || "").trim(), name: (r[C.name] || "").trim(), types: resolveTypes(r[C.impl_type]),
-      stage: (r[C.current_stage] || "").trim(), timeInStageDays: parseDurationDays(r[C.time_in_current_stage]),
-      poToLiveDays: parseDurationDays(r[C.duration_po_to_live]), poDate: po, liveDate: live,
-      createDate: parseDate(r[C.create_date]), isOpen: !live, intervals }; }).filter(r => r.id);
+      stage, timeInStageDays: parseDurationDays(r[C.time_in_current_stage]),
+      poToLiveDays: parseDurationDays(r[C.duration_po_to_live]), poDate: po, liveDate: live, closedDate,
+      createDate: parseDate(r[C.create_date]), isOpen: stage !== LIVE_STAGE, intervals }; }).filter(r => r.id);
   const byId = new Map(); mapped.forEach(r => byId.set(r.id, r));   // dedupe by Record ID (last wins)
   return [...byId.values()]; }
 
@@ -88,17 +92,22 @@ function m2History(records) { const b = {};
   for (const r of records) { if (!r.liveDate) continue; let d = r.poToLiveDays; if (d == null && r.poDate) d = Math.round((r.liveDate - r.poDate) / MS_PER_DAY);
     if (d == null || d < 0) continue; (b[monthKey(r.liveDate)] ||= []).push(d); }
   return Object.fromEntries(Object.entries(b).map(([k, v]) => [k, Math.round(mean(v))])); }
-function m3Daily(records) {                             // open backlog per DAY, by type — full history from timestamps
+function m3Daily(records) {                             // open pipeline per DAY, by type — open until the STAGE moves to Live/Complete
   const labels = Object.keys(CONFIG.typeLabels); let minD = null, maxD = null;
-  records.forEach(r => { if (r.createDate) { if (!minD || r.createDate < minD) minD = r.createDate; if (!maxD || r.createDate > maxD) maxD = r.createDate; } if (r.liveDate && (!maxD || r.liveDate > maxD)) maxD = r.liveDate; });
+  records.forEach(r => { if (r.createDate) { if (!minD || r.createDate < minD) minD = r.createDate; if (!maxD || r.createDate > maxD) maxD = r.createDate; } if (r.closedDate && (!maxD || r.closedDate > maxD)) maxD = r.closedDate; });
   if (!minD) return [];
   const end = maxD || minD, out = [];
   for (let d = new Date(Date.UTC(minD.getUTCFullYear(), minD.getUTCMonth(), minD.getUTCDate())); d <= end && out.length < 1500; d = addDay(d)) {
     const D = d.getTime(), row = { date: dstr(d), total: 0 }; labels.forEach(l => row[l] = 0);
-    for (const r of records) { if (!r.createDate || r.createDate.getTime() > D) continue; if (r.liveDate && r.liveDate.getTime() <= D) continue; row.total++; r.types.forEach(t => { if (labels.includes(t)) row[t]++; }); }
+    for (const r of records) { if (!r.createDate || r.createDate.getTime() > D) continue; if (r.closedDate && r.closedDate.getTime() <= D) continue; row.total++; r.types.forEach(t => { if (labels.includes(t)) row[t]++; }); }
     out.push(row);
   }
   return out; }
+function pendingClose(records, snapMonth) {             // live date set but stage not yet Live/Complete — flag for review
+  const asOf = monthStart(snapMonth); const end = new Date(Math.max(asOf.getTime(), ...records.map(r => r.liveDate ? r.liveDate.getTime() : 0)));
+  return records.filter(r => r.liveDate && r.stage !== LIVE_STAGE)
+    .map(r => ({ name: r.name, stage: r.stage, types: r.types, live: dstr(r.liveDate), days: Math.max(0, Math.round((end - r.liveDate) / MS_PER_DAY)) }))
+    .sort((a, b) => b.days - a.days); }
 function m4GoLives(records) { const b = {}; for (const r of records) if (r.liveDate) b[dstr(r.liveDate)] = (b[dstr(r.liveDate)] || 0) + 1; return b; }  // by DAY
 
 function buildStageDaily(records) {                    // daily avg-days-in-stage per stage, from entered/exited dates
@@ -140,6 +149,7 @@ function applyImport(store, records, snap) {
     store.m3 = m3Daily(records); store.m4 = m4GoLives(records);
     store.m2 = { all: m2History(records), "CAREpoint": m2History(byType("CAREpoint")), "e-Bridge": m2History(byType("e-Bridge")) };
     store.stageDaily = { all: buildStageDaily(records), "CAREpoint": buildStageDaily(byType("CAREpoint")), "e-Bridge": buildStageDaily(byType("e-Bridge")) };
+    store.pendingClose = pendingClose(records, snap);
     store.asOfMonth = snap;
   }
   store.lastImport = { month: snap, records: records.length, when: new Date().toISOString(), older: !!older };
@@ -270,6 +280,22 @@ function render(store) {
     document.getElementById("speedPill").innerHTML = "";
     document.getElementById("speedCap").textContent = "No completed implementations in the selected range.";
   }
+
+  // live-pending-close flags — live date set, stage not yet moved to Live/Complete
+  const STALE_DAYS = 30;
+  const pcAll = (store.pendingClose || []).filter(p => cohort === "all" || (p.types || []).includes(cohort));
+  document.querySelector("#sec-pending h3").textContent = "Live, pending close" + cohortLabel();
+  const stale = pcAll.filter(p => p.days > STALE_DAYS).length;
+  document.getElementById("pendPill").innerHTML = pcAll.length
+    ? `<span class="pill ${stale ? "bad" : "flat"}">${pcAll.length} open${stale ? ` · ${stale} over ${STALE_DAYS}d` : ""}</span>` : "";
+  document.getElementById("pendList").innerHTML = pcAll.length ? pcAll.map(p => `
+    <div class="pend-row">
+      <div class="pn" title="${p.name}">${p.name}</div>
+      <div class="pm">${p.stage}</div>
+      <div class="pm">live ${fmtDay(p.live)}</div>
+      <div>${p.days > STALE_DAYS ? `<span class="pill bad">${p.days}d since live</span>` : `<span class="pill flat">${p.days}d since live</span>`}</div>
+    </div>`).join("")
+    : `<div style="color:var(--hint);padding:10px 0">None — every live customer has been closed out. Clean.</div>`;
 
   // stage feature — TradingView watchlist + DAILY price chart, reconstructed from stage entered/exited dates
   const sd = sdSel(store);                              // respects the cohort filter (All / CAREpoint / e-Bridge)
