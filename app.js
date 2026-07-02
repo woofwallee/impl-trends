@@ -386,7 +386,11 @@ function render(store) {
   destroy("stageBig");
   if (sel && sdDays.length) {
     const fullArr = stageArr(sel.st);
-    const wi = sdDays.map((d, i) => ({ d, i })).filter(o => inDayRange(o.d));   // crop chart to the selected window
+    let wi = sdDays.map((d, i) => ({ d, i })).filter(o => inDayRange(o.d));   // crop chart to the selected window
+    // Wide windows switch to weekly closes so the steps stay broad and crisply 90° (narrow the range for daily detail)
+    const weekly = wi.length > 190;
+    if (weekly) wi = wi.filter((o, idx) => idx % 7 === 0 || idx === wi.length - 1);
+    document.getElementById("cpSub").textContent = (weekly ? "Weekly detail (narrow the date range for daily)" : "Daily detail") + " · hover to read · scroll to zoom · drag to pan · double-click to reset";
     const wdays = wi.map(o => o.d), arr = wi.map(o => fullArr[o.i]);
     const col = sel.t.kind === "up" ? BAD : (sel.t.kind === "down" || sel.t.kind === "cleared") ? GOOD : BLUE;
     const tc = themeColors(), el = document.getElementById("stageBig");
@@ -394,7 +398,7 @@ function render(store) {
     charts["stageBig"] = new Chart(el, {
       type: "line",
       data: { labels: wdays, datasets: [{ data: arr, borderColor: col, backgroundColor: g, borderWidth: 2, fill: true, stepped: true, tension: 0, spanGaps: false, pointRadius: 0, pointHoverRadius: 5, pointBackgroundColor: col, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2 }] },
-      options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+      options: { responsive: true, maintainAspectRatio: false, devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2), interaction: { mode: "index", intersect: false },
         onHover: (e, els) => { const c = charts["stageBig"]; if (!c) return; const pr = document.getElementById("cpPrice"), ro = document.getElementById("cpReadout");
           if (els && els.length) { const i = els[0].index, v = c.data.datasets[0].data[i], d = c.data.labels[i];
             pr.textContent = v == null ? "—" : v + "d"; ro.textContent = " · " + fmtDay(d) + (v == null ? " · no open work" : " · " + v + " days"); } },
