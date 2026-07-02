@@ -320,6 +320,7 @@ function render(store) {
   document.getElementById("goliveCap").textContent = glWinTotal
     ? `${glWinTotal} implementation${glWinTotal === 1 ? "" : "s"} went live in the selected period` + (goliveDelta != null ? ` — ${goliveDelta >= 0 ? goliveDelta + " more" : Math.abs(goliveDelta) + " fewer"} than the ${Math.round((new Date(viewRange.to + "T00:00:00Z") - new Date(viewRange.from + "T00:00:00Z")) / MS_PER_DAY) + 1} days before.` : ".")
     : "No go-lives in the selected period.";
+  document.getElementById("breakdown").style.display = cohort === "all" ? "" : "none";
   const bdTot = cur.total || 1;
   document.getElementById("breakdown").innerHTML = [
     { l: "Total open", v: cur.total, c: "var(--ink)" }, { l: "CAREpoint", v: cur["CAREpoint"] || 0, c: CP }, { l: "e-Bridge", v: cur["e-Bridge"] || 0, c: EB },
@@ -392,7 +393,7 @@ function render(store) {
     const g = el.getContext("2d").createLinearGradient(0, 0, 0, 300); g.addColorStop(0, col + "33"); g.addColorStop(1, col + "00");
     charts["stageBig"] = new Chart(el, {
       type: "line",
-      data: { labels: wdays, datasets: [{ data: arr, borderColor: col, backgroundColor: g, borderWidth: 2, fill: true, tension: .25, spanGaps: false, pointRadius: 0, pointHoverRadius: 5, pointBackgroundColor: col, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2 }] },
+      data: { labels: wdays, datasets: [{ data: arr, borderColor: col, backgroundColor: g, borderWidth: 2, fill: true, stepped: true, tension: 0, spanGaps: false, pointRadius: 0, pointHoverRadius: 5, pointBackgroundColor: col, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2 }] },
       options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
         onHover: (e, els) => { const c = charts["stageBig"]; if (!c) return; const pr = document.getElementById("cpPrice"), ro = document.getElementById("cpReadout");
           if (els && els.length) { const i = els[0].index, v = c.data.datasets[0].data[i], d = c.data.labels[i];
