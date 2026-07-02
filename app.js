@@ -247,7 +247,7 @@ function render(store) {
   // KPIs — always show total + both cohorts, regardless of the cohort filter
   const totalDelta = prevRow ? cur.total - prevRow.total : null;
   const kpis = [
-    { label: "Open backlog", icon: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>', val: cur.total, pill: pill(totalDelta, true), foot: prevLbl ? "vs " + prevLbl : "open now" },
+    { label: "Open implementations (backlog)", icon: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>', val: cur.total, pill: pill(totalDelta, true), foot: prevLbl ? "vs " + prevLbl : "open now" },
     { label: "CAREpoint open", icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/>', val: cur["CAREpoint"] || 0, pill: pill(prevRow ? (cur["CAREpoint"] || 0) - (prevRow["CAREpoint"] || 0) : null, true), foot: "open implementations" },
     { label: "e-Bridge open", icon: '<path d="M4 7h16M4 12h16M4 17h10"/>', val: cur["e-Bridge"] || 0, pill: pill(prevRow ? (cur["e-Bridge"] || 0) - (prevRow["e-Bridge"] || 0) : null, true), foot: "open implementations" },
   ];
@@ -257,7 +257,7 @@ function render(store) {
 
   // backlog — daily line within window, under the cohort filter
   document.getElementById("backlogNow").textContent = bl(cur).toLocaleString() + (cohort === "all" ? "" : "");
-  document.querySelector("#sec-backlog h3").textContent = "Backlog trend" + cohortLabel();
+  document.querySelector("#sec-backlog h3").textContent = "Open pipeline trend (backlog)" + cohortLabel();
   document.getElementById("backlogPill").innerHTML = pill(backlogDelta, true) + (prevLbl ? ` <span style="font-size:12px;color:var(--hint)">vs ${prevLbl}</span>` : "");
   areaChart("backlogChart", win.map(r => ({ m: r.date, v: bl(r) })), 220, fmtDay);
   const bdTot = cur.total || 1;
@@ -267,7 +267,7 @@ function render(store) {
 
   // speed to go-live (PO -> live/complete, by go-live month) — also native in HubSpot; here so the monthly story is one page
   if (speedTo != null) {
-    document.querySelector("#sec-speed h3").textContent = "Speed to go-live" + cohortLabel();
+    document.querySelector("#sec-speed h3").textContent = "Time to go-live" + cohortLabel();
     document.getElementById("speedNow").textContent = speedTo;
     document.getElementById("speedPill").innerHTML = pill(speedDelta, true);
     areaChart("speedChart", m2cropKeys.map(k => ({ m: k, v: m2c[k] })), 240);
@@ -368,7 +368,7 @@ function render(store) {
   const down = rows.filter(s => s.t.kind === "down" || s.t.kind === "cleared").length;
   const flat = rows.filter(s => s.t.kind === "flat").length;
   document.getElementById("stageSummary").innerHTML = sdDays.length
-    ? `<span><b style="color:var(--bad)">${up}</b> backing up</span><span><b style="color:var(--good)">${down}</b> clearing</span><span><b>${flat}</b> flat</span>`
+    ? `<span><b style="color:var(--bad)">${up}</b> rising</span><span><b style="color:var(--good)">${down}</b> falling</span><span><b>${flat}</b> flat</span>`
     : `<span>Needs stage date columns in the export</span>`;
 
   document.getElementById("subtitle").textContent = `Implementation pipeline · ${store.lastImport.records} records · ${fmtMonth(viewRange.from)} – ${fmtMonth(viewRange.to)}`;
