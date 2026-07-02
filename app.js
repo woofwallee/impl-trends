@@ -610,7 +610,16 @@ function init() {
   const demoBtn = document.getElementById("demoBtn");
   if (demoBtn) demoBtn.addEventListener("click", () => { localStorage.removeItem("impl_trends_demo_off"); loadDemo(); });
 
-  const s0 = loadStore();
+  let s0 = loadStore();
+  // Self-heal stores written by older app versions: rebuild from the last imported file kept in Import history
+  if (s0.lastImport && !s0.pendingDaily) {
+    const imp = loadImports().find(e => e.csv);
+    if (imp) { try {
+      const wasDemo = !!s0.demo;
+      s0 = applyImport(blankStore(), normalize(parseCSV(imp.csv)), imp.snapMonth);
+      s0.demo = wasDemo; saveStore(s0);
+    } catch (e) { } }
+  }
   if (!s0.lastImport && !localStorage.getItem("impl_trends_demo_off")) loadDemo();
   else render(s0);
 }
