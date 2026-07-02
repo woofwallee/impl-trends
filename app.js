@@ -446,6 +446,20 @@ function init() {
   const zp = window.ChartZoom || window["chartjs-plugin-zoom"] || window.chartjsPluginZoom;
   if (zp && window.Chart) { try { Chart.register(zp); } catch (e) { } }   // no-op if auto-registered
   applyTheme(localStorage.getItem(THEME_KEY) || "light");
+
+  // Dropdown menus close on outside click or Escape (and opening one closes the others).
+  document.addEventListener("click", e => {
+    document.querySelectorAll("details.menu[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenus(); });
+
+  // Date pickers are always populated, even before the first import.
+  buildRangeSelects();
+  const now = new Date();
+  document.getElementById("fromMonth").value = "01";
+  document.getElementById("fromYear").value = String(FLOOR_YEAR);
+  document.getElementById("toMonth").value = String(Math.min(12, now.getMonth() + 1)).padStart(2, "0");
+  document.getElementById("toYear").value = String(Math.min(MAX_YEAR, Math.max(FLOOR_YEAR, now.getFullYear())));
   const file = document.getElementById("file"), pick = () => file.click();
   document.getElementById("importBtn").addEventListener("click", pick);
   document.getElementById("importBtn2").addEventListener("click", pick);
