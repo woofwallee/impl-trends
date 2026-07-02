@@ -103,11 +103,22 @@ function m3Daily(records) {                             // open pipeline per DAY
     out.push(row);
   }
   return out; }
-function pendingClose(records, snapMonth) {             // live date set but stage not yet Live/Complete — flag for review
+function pendingClose(records, snapMonth) {             // live date set but stage not yet Live/Complete — summary stats
   const asOf = monthStart(snapMonth); const end = new Date(Math.max(asOf.getTime(), ...records.map(r => r.liveDate ? r.liveDate.getTime() : 0)));
   return records.filter(r => r.liveDate && r.stage !== LIVE_STAGE)
     .map(r => ({ name: r.name, stage: r.stage, types: r.types, live: dstr(r.liveDate), days: Math.max(0, Math.round((end - r.liveDate) / MS_PER_DAY)) }))
     .sort((a, b) => b.days - a.days); }
+function pendingDaily(records) {                        // DAILY count of live-but-not-closed — timeline of the bucket
+  const withLive = records.filter(r => r.liveDate); if (!withLive.length) return [];
+  let minD = null, maxD = null;
+  withLive.forEach(r => { if (!minD || r.liveDate < minD) minD = r.liveDate; const e = r.closedDate || r.liveDate; if (!maxD || e > maxD) maxD = e; });
+  const out = [];
+  for (let d = new Date(Date.UTC(minD.getUTCFullYear(), minD.getUTCMonth(), minD.getUTCDate())); d <= maxD && out.length < 1500; d = addDay(d)) {
+    const D = d.getTime(); let c = 0;
+    for (const r of withLive) { if (r.liveDate.getTime() <= D && (!r.closedDate || r.closedDate.getTime() > D)) c++; }
+    out.push({ date: dstr(d), v: c });
+  }
+  return out; }
 function m4GoLives(records) { const b = {}; for (const r of records) if (r.liveDate) b[dstr(r.liveDate)] = (b[dstr(r.liveDate)] || 0) + 1; return b; }  // by DAY
 
 function buildStageDaily(records) {                    // daily avg-days-in-stage per stage, from entered/exited dates
@@ -150,6 +161,7 @@ function applyImport(store, records, snap) {
     store.m2 = { all: m2History(records), "CAREpoint": m2History(byType("CAREpoint")), "e-Bridge": m2History(byType("e-Bridge")) };
     store.stageDaily = { all: buildStageDaily(records), "CAREpoint": buildStageDaily(byType("CAREpoint")), "e-Bridge": buildStageDaily(byType("e-Bridge")) };
     store.pendingClose = pendingClose(records, snap);
+    store.pendingDaily = { all: pendingDaily(records), "CAREpoint": pendingDaily(byType("CAREpoint")), "e-Bridge": pendingDaily(byType("e-Bridge")) };
     store.asOfMonth = snap;
   }
   store.lastImport = { month: snap, records: records.length, when: new Date().toISOString(), older: !!older };
@@ -281,21 +293,20 @@ function render(store) {
     document.getElementById("speedCap").textContent = "No completed implementations in the selected range.";
   }
 
-  // live-pending-close flags — live date set, stage not yet moved to Live/Complete
+  // live-pending-close — timeline of how many sit in the bucket (no individual customers shown)
   const STALE_DAYS = 30;
   const pcAll = (store.pendingClose || []).filter(p => cohort === "all" || (p.types || []).includes(cohort));
   document.querySelector("#sec-pending h3").textContent = "Live, pending close" + cohortLabel();
   const stale = pcAll.filter(p => p.days > STALE_DAYS).length;
   document.getElementById("pendPill").innerHTML = pcAll.length
-    ? `<span class="pill ${stale ? "bad" : "flat"}">${pcAll.length} open${stale ? ` · ${stale} over ${STALE_DAYS}d` : ""}</span>` : "";
-  document.getElementById("pendList").innerHTML = pcAll.length ? pcAll.map(p => `
-    <div class="pend-row">
-      <div class="pn" title="${p.name}">${p.name}</div>
-      <div class="pm">${p.stage}</div>
-      <div class="pm">live ${fmtDay(p.live)}</div>
-      <div>${p.days > STALE_DAYS ? `<span class="pill bad">${p.days}d since live</span>` : `<span class="pill flat">${p.days}d since live</span>`}</div>
-    </div>`).join("")
-    : `<div style="color:var(--hint);padding:10px 0">None — every live customer has been closed out. Clean.</div>`;
+    ? `<span class="pill ${stale ? "bad" : "flat"}">${pcAll.length} in bucket${stale ? ` · ${stale} over ${STALE_DAYS}d` : ""}</span>` : "";
+  const pdMapAll = store.pendingDaily && store.pendingDaily.all ? store.pendingDaily : { all: store.pendingDaily || [] };
+  const pd = (pdMapAll[cohort] || []).filter(p => inDayRange(p.date));
+  areaChart("pendChart", pd.map(p => ({ m: p.date, v: p.v })), 160, fmtDay);
+  const worst = pcAll.length ? pcAll[0].days : 0;
+  document.getElementById("pendCap").textContent = pcAll.length
+    ? `${pcAll.length} customer${pcAll.length === 1 ? " is" : "s are"} live awaiting close-out today${stale ? ` — ${stale} for more than ${STALE_DAYS} days (longest ${worst}d)` : ""}. A rising line means close-outs are falling behind go-lives.`
+    : "No one is waiting on close-out. Clean.";
 
   // stage feature — TradingView watchlist + DAILY price chart, reconstructed from stage entered/exited dates
   const sd = sdSel(store);                              // respects the cohort filter (All / CAREpoint / e-Bridge)

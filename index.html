@@ -242,8 +242,9 @@
       </section>
 
       <section class="card" id="sec-pending" style="margin-bottom:16px">
-        <div class="row-h"><div><h3>Live, pending close</h3><p class="ch-sub">Customer is live but the record hasn't been moved to Implementation Live/Complete — review anything sitting here too long</p></div><div id="pendPill"></div></div>
-        <div id="pendList" style="margin-top:8px"></div>
+        <div class="row-h"><div><h3>Live, pending close</h3><p class="ch-sub">How many customers are live but not yet moved to Implementation Live/Complete, over time</p></div><div id="pendPill"></div></div>
+        <div class="canvas-wrap" style="height:160px;margin-top:10px"><canvas id="pendChart"></canvas></div>
+        <div id="pendCap" style="font-size:12px;color:var(--muted);margin-top:10px"></div>
       </section>
 
       <section class="card" id="sec-stage" style="margin-bottom:16px">
