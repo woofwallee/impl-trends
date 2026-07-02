@@ -148,6 +148,7 @@
     <nav class="nav">
       <a class="on" data-goto="kpis"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Dashboard</a>
       <a data-goto="sec-backlog"><svg class="ic" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>Backlog</a>
+      <a data-goto="sec-speed"><svg class="ic" viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>Speed to go-live</a>
       <a data-goto="sec-stage"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Stage times</a>
       <a data-view="history"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 109-9 9.7 9.7 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>Import history</a>
     </nav>
@@ -215,14 +216,22 @@
     </div>
 
     <div id="dashboard" class="hidden">
-      <div class="scopebar">The two trends HubSpot can't show for implementations. Current snapshots (open by stage, go-lives, PO→go-live averages) live in your HubSpot Implementation Dashboard.</div>
+      <div class="scopebar">Andrew's three monthly trends on one page: backlog and time-in-stage (HubSpot can't trend these) plus PO→go-live speed. Current snapshots live in the HubSpot Implementation Dashboard.</div>
       <section class="grid-kpi" id="kpis"></section>
 
-      <section class="card" id="sec-backlog" style="margin-bottom:16px">
-        <div class="row-h"><div><h3>Backlog trend</h3><p class="ch-sub">Open implementations over time — HubSpot can't snapshot this object</p></div><div id="backlogPill"></div></div>
-        <div class="hero-n"><span id="backlogNow">0</span><small>open</small></div>
-        <div class="canvas-wrap" style="height:240px"><canvas id="backlogChart"></canvas></div>
-        <div class="breakdown" id="breakdown"></div>
+      <section class="grid-main">
+        <div class="card" id="sec-backlog">
+          <div class="row-h"><div><h3>Backlog trend</h3><p class="ch-sub">Open implementations over time — HubSpot can't snapshot this object</p></div><div id="backlogPill"></div></div>
+          <div class="hero-n"><span id="backlogNow">0</span><small>open</small></div>
+          <div class="canvas-wrap" style="height:240px"><canvas id="backlogChart"></canvas></div>
+          <div class="breakdown" id="breakdown"></div>
+        </div>
+        <div class="card" id="sec-speed">
+          <div class="row-h"><div><h3>Speed to go-live</h3><p class="ch-sub">Avg days PO → live/complete</p></div><div id="speedPill"></div></div>
+          <div class="hero-n"><span id="speedNow">—</span><small>days</small></div>
+          <div class="canvas-wrap" style="height:240px"><canvas id="speedChart"></canvas></div>
+          <div id="speedCap" style="font-size:12px;color:var(--muted);margin-top:12px"></div>
+        </div>
       </section>
 
       <section class="card" id="sec-stage" style="margin-bottom:16px">

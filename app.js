@@ -242,6 +242,21 @@ function render(store) {
     { l: "Total open", v: cur.total, c: "var(--ink)" }, { l: "CAREpoint", v: cur["CAREpoint"] || 0, c: CP }, { l: "e-Bridge", v: cur["e-Bridge"] || 0, c: EB },
   ].map(b => `<div class="bd"><div class="bd-n">${b.v.toLocaleString()}</div><div class="bd-l">${b.l}</div><div class="bar" style="background:${b.c};width:${Math.max(8, Math.round(b.v / bdTot * 100))}%"></div></div>`).join("");
 
+  // speed to go-live (PO -> live/complete, by go-live month) — also native in HubSpot; here so the monthly story is one page
+  if (speedTo != null) {
+    document.getElementById("speedNow").textContent = speedTo;
+    document.getElementById("speedPill").innerHTML = pill(speedDelta, true);
+    areaChart("speedChart", m2cropKeys.map(k => ({ m: k, v: store.m2[k] })), 240);
+    const spPrev = m2cropKeys.length > 1 ? fmtMonth(m2cropKeys[m2cropKeys.length - 2]) : null;
+    document.getElementById("speedCap").textContent = `${speedTo} days for go-lives in ${fmtMonth(m2cropKeys[m2cropKeys.length - 1])}` +
+      (speedDelta != null ? (speedDelta < 0 ? `, ${Math.abs(speedDelta)} faster than ${spPrev}.` : speedDelta > 0 ? `, ${speedDelta} slower than ${spPrev}.` : ".") : ".");
+  } else {
+    destroy("speedChart");
+    document.getElementById("speedNow").textContent = "—";
+    document.getElementById("speedPill").innerHTML = "";
+    document.getElementById("speedCap").textContent = "No completed implementations in the selected range.";
+  }
+
   // stage feature — TradingView watchlist + DAILY price chart, reconstructed from stage entered/exited dates
   const sd = store.stageDaily || { days: [], series: {}, open: {} };
   const sdDays = sd.days || [];
