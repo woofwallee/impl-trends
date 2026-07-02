@@ -193,8 +193,9 @@ function miniSpark(vals, color) {
 /* ---------- render ---------- */
 function render(store) {
   const dash = document.getElementById("dashboard"), empty = document.getElementById("empty");
-  if (!store.lastImport) { dash.classList.add("hidden"); empty.classList.remove("hidden"); return; }
-  empty.classList.add("hidden"); dash.classList.remove("hidden");
+  if (currentView === "history") { dash.classList.add("hidden"); empty.classList.add("hidden"); if (!store.lastImport) return; }
+  else if (!store.lastImport) { dash.classList.add("hidden"); empty.classList.remove("hidden"); return; }
+  else { empty.classList.add("hidden"); dash.classList.remove("hidden"); }
 
   const months = allMonths(store);
   if (!viewRange.from) viewRange.from = months[0];
@@ -365,12 +366,77 @@ function sharePNG() {
   }).catch(() => toast("PNG export failed.", true));
 }
 
+/* ---------- import history (log of every import, with the raw file) ---------- */
+const IMPORTS_KEY = "impl_trends_imports_v1";
+const IMPORTS_MAX = 12;
+let currentView = "dash";
+
+function loadImports() { try { return JSON.parse(localStorage.getItem(IMPORTS_KEY)) || []; } catch { return []; } }
+function saveImports(arr) {
+  // Quota-safe: on overflow, drop the oldest raw files (keep their log lines) and retry.
+  for (let attempt = 0; attempt < IMPORTS_MAX + 1; attempt++) {
+    try { localStorage.setItem(IMPORTS_KEY, JSON.stringify(arr)); return true; }
+    catch { const victim = [...arr].reverse().find(e => e.csv); if (!victim) return false; victim.csv = null; }
+  }
+  return false;
+}
+function logImport(entry) {
+  const arr = loadImports();
+  arr.unshift(entry);
+  while (arr.length > IMPORTS_MAX) arr.pop();
+  saveImports(arr);
+}
+function fmtDateTime(iso) { const d = new Date(iso); return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) + " " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); }
+
+function showView(v) {
+  currentView = v;
+  const hist = document.getElementById("history");
+  document.querySelectorAll(".nav a").forEach(x => x.classList.toggle("on", (v === "history") === (x.dataset.view === "history") && (v !== "history" ? x.dataset.goto === "kpis" : true)));
+  if (v === "history") { hist.classList.remove("hidden"); renderHistory(); render(loadStore()); }
+  else { hist.classList.add("hidden"); document.getElementById("histPreview").classList.add("hidden"); render(loadStore()); }
+}
+function renderHistory() {
+  const arr = loadImports();
+  document.getElementById("histList").innerHTML = arr.length ? arr.map((e, i) => `
+    <div class="hist-row">
+      <div class="hf" title="${e.fileName}">${e.fileName}${i === 0 ? ' <span class="pill flat" style="margin-left:6px">latest</span>' : ""}${e.older ? ' <span class="pill flat" style="margin-left:6px">older file — kept newer data</span>' : ""}</div>
+      <div class="hm hdate">${fmtDateTime(e.importedAt)}</div>
+      <div class="hm">counted as ${fmtMonth(e.snapMonth)} · ${e.records.toLocaleString()} records</div>
+      <div class="ha">
+        <button class="btn" data-hview="${i}" ${e.csv ? "" : "disabled title='File no longer stored (freed for space) — metadata kept'"}>View</button>
+        <button class="btn" data-hexp="${i}" ${e.csv ? "" : "disabled"}>Export</button>
+      </div>
+    </div>`).join("")
+    : `<div style="color:var(--hint);padding:26px 0;text-align:center">No imports yet. Import a HubSpot export from the Dashboard and it will be logged here.</div>`;
+  document.querySelectorAll("[data-hview]").forEach(b => b.addEventListener("click", () => previewImport(+b.dataset.hview)));
+  document.querySelectorAll("[data-hexp]").forEach(b => b.addEventListener("click", () => exportImport(+b.dataset.hexp)));
+}
+function previewImport(i) {
+  const e = loadImports()[i]; if (!e || !e.csv) return;
+  const rows = parseCSV(e.csv), cols = rows.length ? Object.keys(rows[0]) : [];
+  const shown = rows.slice(0, 50);
+  document.getElementById("hpTitle").textContent = e.fileName;
+  document.getElementById("hpSub").textContent = `Imported ${fmtDateTime(e.importedAt)} · counted as ${fmtMonth(e.snapMonth)} · showing ${shown.length} of ${rows.length.toLocaleString()} rows`;
+  document.getElementById("hpTable").innerHTML = `<table class="htable"><thead><tr>${cols.map(c => `<th>${c}</th>`).join("")}</tr></thead>
+    <tbody>${shown.map(r => `<tr>${cols.map(c => `<td>${(r[c] || "").slice(0, 60)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  const pv = document.getElementById("histPreview");
+  pv.classList.remove("hidden"); pv.dataset.idx = i;
+  pv.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+function exportImport(i) {
+  const e = loadImports()[i]; if (!e || !e.csv) return;
+  const blob = new Blob([e.csv], { type: "text/csv" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = e.fileName; a.click();
+}
+
 /* ---------- events ---------- */
 function toast(msg, err) { const t = document.getElementById("toast"); t.textContent = msg; t.className = "toast show" + (err ? " err" : ""); setTimeout(() => t.className = "toast", 3200); }
 function closeMenus() { document.querySelectorAll("details.menu[open]").forEach(d => d.open = false); }
 function handleFile(file) { const r = new FileReader(); r.onload = e => {
   try { const records = normalize(parseCSV(e.target.result)); if (!records.length) throw new Error("No records found.");
-    const snap = snapshotMonthFromName(file.name); const store = applyImport(loadStore(), records, snap); saveStore(store); render(store);
+    const snap = snapshotMonthFromName(file.name); const store = applyImport(loadStore(), records, snap); saveStore(store);
+    logImport({ fileName: file.name, importedAt: new Date().toISOString(), snapMonth: snap, records: records.length, older: !!store.lastImport.older, csv: e.target.result });
+    showView("dash");
     toast(store.lastImport.older
       ? `Recorded ${fmtMonth(snap)} stage snapshot. Kept newer backlog/speed data (${fmtMonth(store.asOfMonth)}).`
       : `Imported ${records.length} records for ${fmtMonth(snap)}.`); } catch (err) { toast("Import problem: " + err.message, true); } };
@@ -392,7 +458,7 @@ function init() {
   document.getElementById("pngBtn").addEventListener("click", () => { closeMenus(); sharePNG(); });
   document.getElementById("pdfBtn").addEventListener("click", () => { closeMenus(); window.print(); });
 
-  document.getElementById("reset").addEventListener("click", () => { closeMenus(); if (confirm("Reset all data? This clears the stored history in this browser and cannot be undone. Back up first if unsure.")) { localStorage.removeItem(STORE_KEY); location.reload(); } });
+  document.getElementById("reset").addEventListener("click", () => { closeMenus(); if (confirm("Reset all data? This clears the stored history AND import log in this browser and cannot be undone. Back up first if unsure.")) { localStorage.removeItem(STORE_KEY); localStorage.removeItem(IMPORTS_KEY); location.reload(); } });
   document.getElementById("backup").addEventListener("click", () => { closeMenus();
     const blob = new Blob([localStorage.getItem(STORE_KEY) || JSON.stringify(blankStore())], { type: "application/json" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "implementation-trends-history.json"; a.click(); });
@@ -407,7 +473,12 @@ function init() {
 
   document.querySelectorAll(".nav a").forEach(a => a.addEventListener("click", () => {
     document.querySelectorAll(".nav a").forEach(x => x.classList.remove("on")); a.classList.add("on");
+    if (a.dataset.view === "history") { showView("history"); return; }
+    if (currentView === "history") showView("dash");
     const el = document.getElementById(a.dataset.goto); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }));
+  document.getElementById("histBack").addEventListener("click", () => { showView("dash"); document.querySelectorAll(".nav a").forEach(x => x.classList.toggle("on", x.dataset.goto === "kpis")); });
+  document.getElementById("hpClose").addEventListener("click", () => document.getElementById("histPreview").classList.add("hidden"));
+  document.getElementById("hpExport").addEventListener("click", () => { const i = +document.getElementById("histPreview").dataset.idx; exportImport(i); });
 
   render(loadStore());
 }

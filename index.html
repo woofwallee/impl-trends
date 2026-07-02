@@ -98,6 +98,16 @@
   .colhdr .r{text-align:right}
   .mktsum{display:flex;gap:14px;font-size:12px;color:var(--muted)}
   .mktsum b{font-weight:600}
+  .hist-row{display:grid;grid-template-columns:1fr auto auto auto;gap:14px;align-items:center;padding:13px 4px;border-top:1px solid var(--line2)}
+  .hist-row:first-child{border-top:none}
+  .hist-row .hf{font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hist-row .hm{font-size:12.5px;color:var(--muted);white-space:nowrap}
+  .hist-row .ha{display:flex;gap:6px}
+  .tablewrap{overflow:auto;max-height:430px;margin-top:14px;border:1px solid var(--line);border-radius:10px}
+  .htable{border-collapse:collapse;font-size:12px;min-width:100%}
+  .htable th{position:sticky;top:0;background:var(--tile);color:var(--muted);font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;z-index:2}
+  .htable td{padding:7px 10px;border-bottom:1px solid var(--line2);white-space:nowrap;color:var(--ink)}
+  @media(max-width:720px){ .hist-row{grid-template-columns:1fr auto} .hist-row .hm.hdate{display:none} }
   .tf{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
   .tf button{border:none;background:var(--panel);color:var(--muted);font-size:12px;font-weight:500;padding:8px 10px;cursor:pointer;border-right:1px solid var(--line)}
   .tf button:last-child{border-right:none}
@@ -139,6 +149,7 @@
       <a class="on" data-goto="kpis"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Dashboard</a>
       <a data-goto="sec-backlog"><svg class="ic" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>Backlog</a>
       <a data-goto="sec-stage"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Stage times</a>
+      <a data-view="history"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 109-9 9.7 9.7 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>Import history</a>
     </nav>
     <div class="grow"></div>
     <div class="privacy"><b>Private by design</b>Your data never leaves this browser — nothing is uploaded. Back up history to a file to keep it.</div>
@@ -177,6 +188,19 @@
         </div></details>
         <input type="file" id="file" accept=".csv,text/csv"><input type="file" id="histFile" accept=".json">
       </div>
+    </div>
+
+    <div id="history" class="hidden">
+      <section class="card">
+        <div class="row-h"><div><h3>Import history</h3><p class="ch-sub">Every export imported into this dashboard · newest first · stored in this browser</p></div>
+        <button class="btn" id="histBack">← Back to dashboard</button></div>
+        <div id="histList" style="margin-top:14px"></div>
+      </section>
+      <section class="card hidden" id="histPreview" style="margin-top:16px">
+        <div class="row-h"><div><h3 id="hpTitle">—</h3><p class="ch-sub" id="hpSub"></p></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="hpExport"><svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Download CSV</button><button class="btn" id="hpClose">Close</button></div></div>
+        <div class="tablewrap" id="hpTable"></div>
+      </section>
     </div>
 
     <div id="empty" class="empty">
