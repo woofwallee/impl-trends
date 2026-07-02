@@ -31,6 +31,12 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const LIVE_STAGE = "Implementation Live/Complete";
 let viewRange = { from: null, to: null };
 let selectedStage = null;
+let cohort = "all";                                      // "all" | "CAREpoint" | "e-Bridge"
+function m2Map(store) { const m = store.m2 || {}; return m.all ? m : { all: m }; }               // legacy stores wrap as all
+function sdMap(store) { const s = store.stageDaily || {}; return s.all ? s : { all: s }; }
+function m2Sel(store) { return m2Map(store)[cohort] || {}; }
+function sdSel(store) { return sdMap(store)[cohort] || { days: [], series: {}, open: {} }; }
+function cohortLabel() { return cohort === "all" ? "" : " · " + cohort; }
 function addDay(d) { return new Date(d.getTime() + MS_PER_DAY); }
 function dstr(d) { return d.toISOString().slice(0, 10); }
 function fmtDay(ds) { const d = new Date(ds + "T00:00:00Z"); return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit", timeZone: "UTC" }); }
@@ -130,8 +136,11 @@ function applyImport(store, records, snap) {
   store.m1[snap] = m1StageAge(records);                 // stage snapshot always recorded for its month
   const older = store.asOfMonth && snap < store.asOfMonth;
   if (!older) {                                          // newest file wins for the backfilled metrics
-    store.m2 = m2History(records); store.m3 = m3Daily(records); store.m4 = m4GoLives(records);
-    store.stageDaily = buildStageDaily(records); store.asOfMonth = snap;
+    const byType = t => records.filter(r => r.types.includes(t));
+    store.m3 = m3Daily(records); store.m4 = m4GoLives(records);
+    store.m2 = { all: m2History(records), "CAREpoint": m2History(byType("CAREpoint")), "e-Bridge": m2History(byType("e-Bridge")) };
+    store.stageDaily = { all: buildStageDaily(records), "CAREpoint": buildStageDaily(byType("CAREpoint")), "e-Bridge": buildStageDaily(byType("e-Bridge")) };
+    store.asOfMonth = snap;
   }
   store.lastImport = { month: snap, records: records.length, when: new Date().toISOString(), older: !!older };
   viewRange = { from: null, to: null }; return store; }
@@ -140,7 +149,7 @@ function applyImport(store, records, snap) {
 function fmtMonth(k) { if (!k) return "—"; const [y, m] = k.split("-").map(Number); return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }); }
 function pill(d, lowerBetter) { if (d == null) return `<span class="pill flat">new</span>`; if (d === 0) return `<span class="pill flat">0</span>`;
   const down = d < 0, ok = lowerBetter ? down : !down; return `<span class="pill ${ok ? "good" : "bad"}">${down ? "&#9660;" : "&#9650;"} ${Math.abs(d)}</span>`; }
-function allMonths(store) { const set = new Set(); (store.m3 || []).forEach(r => set.add(r.date.slice(0, 7))); Object.keys(store.m2 || {}).forEach(m => set.add(m)); Object.keys(store.m4 || {}).forEach(d => set.add(d.slice(0, 7))); if (store.stageDaily) (store.stageDaily.days || []).forEach(d => set.add(d.slice(0, 7))); return [...set].sort(); }
+function allMonths(store) { const set = new Set(); (store.m3 || []).forEach(r => set.add(r.date.slice(0, 7))); Object.keys(m2Map(store).all || {}).forEach(m => set.add(m)); Object.keys(store.m4 || {}).forEach(d => set.add(d.slice(0, 7))); (sdMap(store).all.days || []).forEach(d => set.add(d.slice(0, 7))); return [...set].sort(); }
 function inRange(m) { return (!viewRange.from || m >= viewRange.from) && (!viewRange.to || m <= viewRange.to); }
 function winFromDay() { return viewRange.from ? viewRange.from + "-01" : "0000-01-01"; }
 function winToDay() { if (!viewRange.to) return "9999-12-31"; const [y, m] = viewRange.to.split("-").map(Number); const last = new Date(Date.UTC(y, m, 0)).getUTCDate(); return viewRange.to + "-" + String(last).padStart(2, "0"); }
@@ -204,12 +213,13 @@ function render(store) {
 
   const labels = Object.keys(CONFIG.typeLabels);
   const m3 = store.m3 || [];                             // daily rows {date,total,CAREpoint,e-Bridge}
+  const bl = r => cohort === "all" ? r.total : (r[cohort] || 0);   // backlog value under the cohort filter
   const win = m3.filter(r => inDayRange(r.date));         // filtered window governs the chart
   const cur = win.length ? win[win.length - 1] : (m3.length ? m3[m3.length - 1] : { total: 0 });
   const curIdx = m3.findIndex(r => r.date === cur.date);  // delta = ~30 days before the window end
   const prevRow = curIdx >= 30 ? m3[curIdx - 30] : (curIdx > 0 ? m3[0] : null);
   const prevLbl = prevRow ? fmtDay(prevRow.date) : null;
-  const backlogDelta = prevRow ? cur.total - prevRow.total : null;
+  const backlogDelta = prevRow ? bl(cur) - bl(prevRow) : null;
 
   // go-lives: aggregate daily -> month within the window (daily is too noisy to plot)
   const glMonthly = {}; Object.entries(store.m4 || {}).forEach(([d, c]) => { if (inDayRange(d)) { const mk = d.slice(0, 7); glMonthly[mk] = (glMonthly[mk] || 0) + c; } });
@@ -218,14 +228,16 @@ function render(store) {
   const glPrev = glKeys.length > 1 ? glMonthly[glKeys[glKeys.length - 2]] : null;
   const goliveDelta = glPrev != null ? glCur - glPrev : null;
 
-  const m2cropKeys = Object.keys(store.m2 || {}).filter(inRange).sort();
-  const speedTo = m2cropKeys.length ? store.m2[m2cropKeys[m2cropKeys.length - 1]] : null;
-  const speedPrevV = m2cropKeys.length > 1 ? store.m2[m2cropKeys[m2cropKeys.length - 2]] : null;
+  const m2c = m2Sel(store);                              // cohort-filtered PO->go-live months
+  const m2cropKeys = Object.keys(m2c).filter(inRange).sort();
+  const speedTo = m2cropKeys.length ? m2c[m2cropKeys[m2cropKeys.length - 1]] : null;
+  const speedPrevV = m2cropKeys.length > 1 ? m2c[m2cropKeys[m2cropKeys.length - 2]] : null;
   const speedDelta = (speedTo != null && speedPrevV != null) ? speedTo - speedPrevV : null;
 
-  // KPIs
+  // KPIs — always show total + both cohorts, regardless of the cohort filter
+  const totalDelta = prevRow ? cur.total - prevRow.total : null;
   const kpis = [
-    { label: "Open backlog", icon: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>', val: cur.total, pill: pill(backlogDelta, true), foot: prevLbl ? "vs " + prevLbl : "open now" },
+    { label: "Open backlog", icon: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>', val: cur.total, pill: pill(totalDelta, true), foot: prevLbl ? "vs " + prevLbl : "open now" },
     { label: "CAREpoint open", icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/>', val: cur["CAREpoint"] || 0, pill: pill(prevRow ? (cur["CAREpoint"] || 0) - (prevRow["CAREpoint"] || 0) : null, true), foot: "open implementations" },
     { label: "e-Bridge open", icon: '<path d="M4 7h16M4 12h16M4 17h10"/>', val: cur["e-Bridge"] || 0, pill: pill(prevRow ? (cur["e-Bridge"] || 0) - (prevRow["e-Bridge"] || 0) : null, true), foot: "open implementations" },
   ];
@@ -233,10 +245,11 @@ function render(store) {
     <div class="kl">${k.label}<span class="ki"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px">${k.icon}</svg></span></div>
     <div class="kv">${typeof k.val === "number" ? k.val.toLocaleString() : k.val} ${k.pill}</div><div class="kfoot">${k.foot}</div></div>`).join("");
 
-  // backlog — daily line within window
-  document.getElementById("backlogNow").textContent = cur.total.toLocaleString();
+  // backlog — daily line within window, under the cohort filter
+  document.getElementById("backlogNow").textContent = bl(cur).toLocaleString() + (cohort === "all" ? "" : "");
+  document.querySelector("#sec-backlog h3").textContent = "Backlog trend" + cohortLabel();
   document.getElementById("backlogPill").innerHTML = pill(backlogDelta, true) + (prevLbl ? ` <span style="font-size:12px;color:var(--hint)">vs ${prevLbl}</span>` : "");
-  areaChart("backlogChart", win.map(r => ({ m: r.date, v: r.total })), 220, fmtDay);
+  areaChart("backlogChart", win.map(r => ({ m: r.date, v: bl(r) })), 220, fmtDay);
   const bdTot = cur.total || 1;
   document.getElementById("breakdown").innerHTML = [
     { l: "Total open", v: cur.total, c: "var(--ink)" }, { l: "CAREpoint", v: cur["CAREpoint"] || 0, c: CP }, { l: "e-Bridge", v: cur["e-Bridge"] || 0, c: EB },
@@ -244,9 +257,10 @@ function render(store) {
 
   // speed to go-live (PO -> live/complete, by go-live month) — also native in HubSpot; here so the monthly story is one page
   if (speedTo != null) {
+    document.querySelector("#sec-speed h3").textContent = "Speed to go-live" + cohortLabel();
     document.getElementById("speedNow").textContent = speedTo;
     document.getElementById("speedPill").innerHTML = pill(speedDelta, true);
-    areaChart("speedChart", m2cropKeys.map(k => ({ m: k, v: store.m2[k] })), 240);
+    areaChart("speedChart", m2cropKeys.map(k => ({ m: k, v: m2c[k] })), 240);
     const spPrev = m2cropKeys.length > 1 ? fmtMonth(m2cropKeys[m2cropKeys.length - 2]) : null;
     document.getElementById("speedCap").textContent = `${speedTo} days for go-lives in ${fmtMonth(m2cropKeys[m2cropKeys.length - 1])}` +
       (speedDelta != null ? (speedDelta < 0 ? `, ${Math.abs(speedDelta)} faster than ${spPrev}.` : speedDelta > 0 ? `, ${speedDelta} slower than ${spPrev}.` : ".") : ".");
@@ -258,7 +272,8 @@ function render(store) {
   }
 
   // stage feature — TradingView watchlist + DAILY price chart, reconstructed from stage entered/exited dates
-  const sd = store.stageDaily || { days: [], series: {}, open: {} };
+  const sd = sdSel(store);                              // respects the cohort filter (All / CAREpoint / e-Bridge)
+  document.querySelector("#sec-stage h3").textContent = "Time in stage — where open work is piling up" + cohortLabel();
   const sdDays = sd.days || [];
   function stageArr(s) { return sd.series[s] || []; }
   function stageCur(s) { const a = stageArr(s); return a.length ? a[a.length - 1] : null; }
@@ -499,6 +514,11 @@ function init() {
   ["fromMonth", "fromYear", "toMonth", "toYear"].forEach(id =>
     document.getElementById(id).addEventListener("change", () => { const r = rangeFromSelects(); viewRange.from = r.from; viewRange.to = r.to; document.querySelectorAll("#tfPresets button").forEach(x => x.classList.remove("on")); render(loadStore()); }));
   document.querySelectorAll("#tfPresets button").forEach(b => b.addEventListener("click", () => setTF(b.dataset.tf)));
+  document.querySelectorAll("#cohortSel button").forEach(b => b.addEventListener("click", () => {
+    cohort = b.dataset.c;
+    document.querySelectorAll("#cohortSel button").forEach(x => x.classList.toggle("on", x === b));
+    render(loadStore());
+  }));
 
   document.querySelectorAll(".nav a").forEach(a => a.addEventListener("click", () => {
     document.querySelectorAll(".nav a").forEach(x => x.classList.remove("on")); a.classList.add("on");
