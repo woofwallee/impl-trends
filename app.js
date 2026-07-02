@@ -157,7 +157,8 @@ function applyImport(store, records, snap) {
   const older = store.asOfMonth && snap < store.asOfMonth;
   if (!older) {                                          // newest file wins for the backfilled metrics
     const byType = t => records.filter(r => r.types.includes(t));
-    store.m3 = m3Daily(records); store.m4 = m4GoLives(records);
+    store.m3 = m3Daily(records);
+    store.m4 = { all: m4GoLives(records), "CAREpoint": m4GoLives(byType("CAREpoint")), "e-Bridge": m4GoLives(byType("e-Bridge")) };
     store.m2 = { all: m2History(records), "CAREpoint": m2History(byType("CAREpoint")), "e-Bridge": m2History(byType("e-Bridge")) };
     store.stageDaily = { all: buildStageDaily(records), "CAREpoint": buildStageDaily(byType("CAREpoint")), "e-Bridge": buildStageDaily(byType("e-Bridge")) };
     store.pendingClose = pendingClose(records, snap);
@@ -165,17 +166,35 @@ function applyImport(store, records, snap) {
     store.asOfMonth = snap;
   }
   store.lastImport = { month: snap, records: records.length, when: new Date().toISOString(), older: !!older };
+  store.demo = false;
   viewRange = { from: null, to: null }; return store; }
 
 /* ---------- helpers ---------- */
 function fmtMonth(k) { if (!k) return "—"; const [y, m] = k.split("-").map(Number); return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }); }
 function pill(d, lowerBetter) { if (d == null) return `<span class="pill flat">new</span>`; if (d === 0) return `<span class="pill flat">0</span>`;
   const down = d < 0, ok = lowerBetter ? down : !down; return `<span class="pill ${ok ? "good" : "bad"}">${down ? "&#9660;" : "&#9650;"} ${Math.abs(d)}</span>`; }
-function allMonths(store) { const set = new Set(); (store.m3 || []).forEach(r => set.add(r.date.slice(0, 7))); Object.keys(m2Map(store).all || {}).forEach(m => set.add(m)); Object.keys(store.m4 || {}).forEach(d => set.add(d.slice(0, 7))); (sdMap(store).all.days || []).forEach(d => set.add(d.slice(0, 7))); return [...set].sort(); }
-function inRange(m) { return (!viewRange.from || m >= viewRange.from) && (!viewRange.to || m <= viewRange.to); }
-function winFromDay() { return viewRange.from ? viewRange.from + "-01" : "0000-01-01"; }
-function winToDay() { if (!viewRange.to) return "9999-12-31"; const [y, m] = viewRange.to.split("-").map(Number); const last = new Date(Date.UTC(y, m, 0)).getUTCDate(); return viewRange.to + "-" + String(last).padStart(2, "0"); }
-function inDayRange(ds) { return ds >= winFromDay() && ds <= winToDay(); }
+function m4Map(store) { const m = store.m4 || {}; return m.all ? m : { all: m }; }                 // legacy stores wrap as all
+function m4Sel(store) { return m4Map(store)[cohort] || {}; }
+function dataDayBounds(store) {                          // [firstDay, lastDay] across every series
+  const days = [];
+  (store.m3 || []).forEach(r => days.push(r.date));
+  (sdMap(store).all.days || []).forEach(d => days.push(d));
+  Object.keys(m4Map(store).all || {}).forEach(d => days.push(d));
+  Object.keys(m2Map(store).all || {}).forEach(m => days.push(m + "-01"));
+  days.sort();
+  return days.length ? [days[0], days[days.length - 1]] : null;
+}
+function inRange(m) {                                     // month key overlaps the selected day range
+  if (!viewRange.from || !viewRange.to) return true;
+  const [y, mo] = m.split("-").map(Number); const last = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  return (m + "-01") <= viewRange.to && (m + "-" + String(last).padStart(2, "0")) >= viewRange.from;
+}
+function inDayRange(ds) { return (!viewRange.from || ds >= viewRange.from) && (!viewRange.to || ds <= viewRange.to); }
+function priorWindow() {                                  // the equal-length window immediately before the selected one
+  const f = new Date(viewRange.from + "T00:00:00Z"), t = new Date(viewRange.to + "T00:00:00Z");
+  const len = Math.round((t - f) / MS_PER_DAY) + 1;
+  return [dstr(new Date(f.getTime() - len * MS_PER_DAY)), dstr(new Date(f.getTime() - MS_PER_DAY))];
+}
 function themeColors() { const dark = document.documentElement.getAttribute("data-theme") === "dark";
   return { grid: dark ? "#222a39" : "#eef1f5", tick: dark ? "#7c8798" : "#9aa2af", line: getComputedStyle(document.documentElement).getPropertyValue("--blue").trim() || "#2f6ded" }; }
 
@@ -228,40 +247,44 @@ function render(store) {
   else if (!store.lastImport) { dash.classList.add("hidden"); empty.classList.remove("hidden"); return; }
   else { empty.classList.add("hidden"); dash.classList.remove("hidden"); }
 
-  const months = allMonths(store);
-  if (!viewRange.from) viewRange.from = months[0];
-  if (!viewRange.to) viewRange.to = months[months.length - 1];
-  syncRangeSelects();
+  const bounds = dataDayBounds(store);
+  if (bounds) { if (!viewRange.from) viewRange.from = bounds[0]; if (!viewRange.to) viewRange.to = bounds[1]; }
+  syncRangeInputs();
+  const [pFrom, pTo] = priorWindow();                     // equal-length window immediately before the selection
+  const priorHasData = bounds && pTo >= bounds[0];         // suppress comparisons when the prior window predates the data
 
   const labels = Object.keys(CONFIG.typeLabels);
   const m3 = store.m3 || [];                             // daily rows {date,total,CAREpoint,e-Bridge}
   const bl = r => cohort === "all" ? r.total : (r[cohort] || 0);   // backlog value under the cohort filter
   const win = m3.filter(r => inDayRange(r.date));         // filtered window governs the chart
   const cur = win.length ? win[win.length - 1] : (m3.length ? m3[m3.length - 1] : { total: 0 });
-  const curIdx = m3.findIndex(r => r.date === cur.date);  // delta = ~30 days before the window end
-  const prevRow = curIdx >= 30 ? m3[curIdx - 30] : (curIdx > 0 ? m3[0] : null);
-  const prevLbl = prevRow ? fmtDay(prevRow.date) : null;
+  let prevRow = null; if (priorHasData) for (const r of m3) { if (r.date <= pTo) prevRow = r; else break; }   // state at end of prior window
+  const prevLbl = prevRow ? "prior period (ended " + fmtDay(prevRow.date) + ")" : null;
   const backlogDelta = prevRow ? bl(cur) - bl(prevRow) : null;
 
-  // go-lives: aggregate daily -> month within the window (daily is too noisy to plot)
-  const glMonthly = {}; Object.entries(store.m4 || {}).forEach(([d, c]) => { if (inDayRange(d)) { const mk = d.slice(0, 7); glMonthly[mk] = (glMonthly[mk] || 0) + c; } });
+  // go-lives: cohort-filtered daily counts -> monthly bars within the window; compare = window total vs prior-window total
+  const m4c = m4Sel(store);
+  const glMonthly = {}; let glWinTotal = 0, glPrevTotal = 0;
+  Object.entries(m4c).forEach(([d, c]) => {
+    if (inDayRange(d)) { const mk = d.slice(0, 7); glMonthly[mk] = (glMonthly[mk] || 0) + c; glWinTotal += c; }
+    else if (d >= pFrom && d <= pTo) glPrevTotal += c;
+  });
   const glKeys = Object.keys(glMonthly).sort();
-  const glCur = glKeys.length ? glMonthly[glKeys[glKeys.length - 1]] : 0;
-  const glPrev = glKeys.length > 1 ? glMonthly[glKeys[glKeys.length - 2]] : null;
-  const goliveDelta = glPrev != null ? glCur - glPrev : null;
+  const goliveDelta = priorHasData ? glWinTotal - glPrevTotal : null;
 
   const m2c = m2Sel(store);                              // cohort-filtered PO->go-live months
   const m2cropKeys = Object.keys(m2c).filter(inRange).sort();
-  const speedTo = m2cropKeys.length ? m2c[m2cropKeys[m2cropKeys.length - 1]] : null;
-  const speedPrevV = m2cropKeys.length > 1 ? m2c[m2cropKeys[m2cropKeys.length - 2]] : null;
-  const speedDelta = (speedTo != null && speedPrevV != null) ? speedTo - speedPrevV : null;
+  const speedTo = m2cropKeys.length ? Math.round(mean(m2cropKeys.map(k => m2c[k]))) : null;   // window average
+  const m2prevKeys = Object.keys(m2c).filter(m => { const [y, mo] = m.split("-").map(Number); const last = new Date(Date.UTC(y, mo, 0)).getUTCDate(); return (m + "-01") <= pTo && (m + "-" + String(last).padStart(2, "0")) >= pFrom; }).sort();
+  const speedPrevV = m2prevKeys.length ? Math.round(mean(m2prevKeys.map(k => m2c[k]))) : null;
+  const speedDelta = (priorHasData && speedTo != null && speedPrevV != null) ? speedTo - speedPrevV : null;
 
-  // KPIs — always show total + both cohorts, regardless of the cohort filter
+  // KPIs — always show total + both cohorts; deltas compare against the end of the prior equal-length window
   const totalDelta = prevRow ? cur.total - prevRow.total : null;
   const kpis = [
-    { label: "Open implementations (backlog)", icon: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>', val: cur.total, pill: pill(totalDelta, true), foot: prevLbl ? "vs " + prevLbl : "open now" },
-    { label: "CAREpoint open", icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/>', val: cur["CAREpoint"] || 0, pill: pill(prevRow ? (cur["CAREpoint"] || 0) - (prevRow["CAREpoint"] || 0) : null, true), foot: "open implementations" },
-    { label: "e-Bridge open", icon: '<path d="M4 7h16M4 12h16M4 17h10"/>', val: cur["e-Bridge"] || 0, pill: pill(prevRow ? (cur["e-Bridge"] || 0) - (prevRow["e-Bridge"] || 0) : null, true), foot: "open implementations" },
+    { label: "Open implementations (backlog)", icon: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>', val: cur.total, pill: pill(totalDelta, true), foot: prevLbl ? "vs prior period" : "open now" },
+    { label: "CAREpoint open", icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/>', val: cur["CAREpoint"] || 0, pill: pill(prevRow ? (cur["CAREpoint"] || 0) - (prevRow["CAREpoint"] || 0) : null, true), foot: "vs prior period" },
+    { label: "e-Bridge open", icon: '<path d="M4 7h16M4 12h16M4 17h10"/>', val: cur["e-Bridge"] || 0, pill: pill(prevRow ? (cur["e-Bridge"] || 0) - (prevRow["e-Bridge"] || 0) : null, true), foot: "vs prior period" },
   ];
   document.getElementById("kpis").innerHTML = kpis.map(k => `<div class="card kpi">
     <div class="kl">${k.label}<span class="ki"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px">${k.icon}</svg></span></div>
@@ -272,6 +295,15 @@ function render(store) {
   document.querySelector("#sec-backlog h3").textContent = "Open pipeline trend (backlog)" + cohortLabel();
   document.getElementById("backlogPill").innerHTML = pill(backlogDelta, true) + (prevLbl ? ` <span style="font-size:12px;color:var(--hint)">vs ${prevLbl}</span>` : "");
   areaChart("backlogChart", win.map(r => ({ m: r.date, v: bl(r) })), 220, fmtDay);
+
+  // go-lives per month — window bars + prior-period comparison
+  document.querySelector("#sec-golive h3").textContent = "Go-lives per month" + cohortLabel();
+  document.getElementById("goliveNow").textContent = glWinTotal.toLocaleString();
+  document.getElementById("golivePill").innerHTML = pill(goliveDelta, false) + (goliveDelta != null ? ` <span style="font-size:12px;color:var(--hint)">vs prior period</span>` : "");
+  barChart("goliveChart", glKeys.map(k => ({ m: k, v: glMonthly[k] })));
+  document.getElementById("goliveCap").textContent = glWinTotal
+    ? `${glWinTotal} implementation${glWinTotal === 1 ? "" : "s"} went live in the selected period` + (goliveDelta != null ? ` — ${goliveDelta >= 0 ? goliveDelta + " more" : Math.abs(goliveDelta) + " fewer"} than the ${Math.round((new Date(viewRange.to + "T00:00:00Z") - new Date(viewRange.from + "T00:00:00Z")) / MS_PER_DAY) + 1} days before.` : ".")
+    : "No go-lives in the selected period.";
   const bdTot = cur.total || 1;
   document.getElementById("breakdown").innerHTML = [
     { l: "Total open", v: cur.total, c: "var(--ink)" }, { l: "CAREpoint", v: cur["CAREpoint"] || 0, c: CP }, { l: "e-Bridge", v: cur["e-Bridge"] || 0, c: EB },
@@ -281,11 +313,10 @@ function render(store) {
   if (speedTo != null) {
     document.querySelector("#sec-speed h3").textContent = "Time to go-live" + cohortLabel();
     document.getElementById("speedNow").textContent = speedTo;
-    document.getElementById("speedPill").innerHTML = pill(speedDelta, true);
+    document.getElementById("speedPill").innerHTML = pill(speedDelta, true) + (speedDelta != null ? ` <span style="font-size:12px;color:var(--hint)">vs prior period</span>` : "");
     areaChart("speedChart", m2cropKeys.map(k => ({ m: k, v: m2c[k] })), 240);
-    const spPrev = m2cropKeys.length > 1 ? fmtMonth(m2cropKeys[m2cropKeys.length - 2]) : null;
-    document.getElementById("speedCap").textContent = `${speedTo} days for go-lives in ${fmtMonth(m2cropKeys[m2cropKeys.length - 1])}` +
-      (speedDelta != null ? (speedDelta < 0 ? `, ${Math.abs(speedDelta)} faster than ${spPrev}.` : speedDelta > 0 ? `, ${speedDelta} slower than ${spPrev}.` : ".") : ".");
+    document.getElementById("speedCap").textContent = `${speedTo} days average for go-lives in the selected period` +
+      (speedDelta != null ? (speedDelta < 0 ? ` — ${Math.abs(speedDelta)} faster than the prior period.` : speedDelta > 0 ? ` — ${speedDelta} slower than the prior period.` : " — unchanged from the prior period.") : ".");
   } else {
     destroy("speedChart");
     document.getElementById("speedNow").textContent = "—";
@@ -382,39 +413,29 @@ function render(store) {
     ? `<span><b style="color:var(--bad)">${up}</b> rising</span><span><b style="color:var(--good)">${down}</b> falling</span><span><b>${flat}</b> flat</span>`
     : `<span>Needs stage date columns in the export</span>`;
 
-  document.getElementById("subtitle").textContent = `Implementation pipeline · ${store.lastImport.records} records · ${fmtMonth(viewRange.from)} – ${fmtMonth(viewRange.to)}`;
+  document.getElementById("subtitle").textContent = `Implementation pipeline · ${store.lastImport.records} records · ${fmtDay(viewRange.from)} – ${fmtDay(viewRange.to)}` + (store.demo ? " · SAMPLE DATA — Reset, then import your export" : "");
 }
 
-let rangeSelectsBuilt = false;
-function buildRangeSelects() {
-  if (rangeSelectsBuilt) return;
-  const monthOpts = MONTHS.map((m, i) => `<option value="${String(i + 1).padStart(2, "0")}">${m}</option>`).join("");
-  const years = []; for (let y = FLOOR_YEAR; y <= MAX_YEAR; y++) years.push(y);
-  const yearOpts = years.map(y => `<option value="${y}">${y}</option>`).join("");
-  document.getElementById("fromMonth").innerHTML = monthOpts;
-  document.getElementById("toMonth").innerHTML = monthOpts;
-  document.getElementById("fromYear").innerHTML = yearOpts;
-  document.getElementById("toYear").innerHTML = yearOpts;
-  rangeSelectsBuilt = true;
+function syncRangeInputs() {                              // reflect viewRange into the day-level date inputs
+  const f = document.getElementById("fromDate"), t = document.getElementById("toDate");
+  f.min = t.min = `${FLOOR_YEAR}-01-01`; f.max = t.max = `${MAX_YEAR}-12-31`;
+  if (viewRange.from) f.value = viewRange.from;
+  if (viewRange.to) t.value = viewRange.to;
 }
-function syncRangeSelects() {
-  buildRangeSelects();
-  const [fy, fm] = viewRange.from.split("-"), [ty, tm] = viewRange.to.split("-");
-  document.getElementById("fromYear").value = fy; document.getElementById("fromMonth").value = fm;
-  document.getElementById("toYear").value = ty; document.getElementById("toMonth").value = tm;
-}
-function rangeFromSelects() {
-  const f = document.getElementById("fromYear").value + "-" + document.getElementById("fromMonth").value;
-  const t = document.getElementById("toYear").value + "-" + document.getElementById("toMonth").value;
+function rangeFromInputs() {
+  const f = document.getElementById("fromDate").value, t = document.getElementById("toDate").value;
+  if (!f || !t) return null;
   return f <= t ? { from: f, to: t } : { from: t, to: f };  // auto-swap if inverted
 }
 function setTF(tf) {
-  const store = loadStore(), months = allMonths(store); if (!months.length) return;
-  const last = months[months.length - 1];
-  if (tf === "all") viewRange.from = months[0];
-  else { const n = parseInt(tf, 10), [y, m] = last.split("-").map(Number); const d = new Date(Date.UTC(y, m - 1 - (n - 1), 1));
-    const k = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`; viewRange.from = k < months[0] ? months[0] : k; }
-  viewRange.to = last;
+  const store = loadStore(), b = dataDayBounds(store); if (!b) return;
+  viewRange.to = b[1];
+  if (tf === "all") viewRange.from = b[0];
+  else {
+    const n = parseInt(tf, 10), t = new Date(b[1] + "T00:00:00Z");
+    const f = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() - n, t.getUTCDate() + 1));
+    viewRange.from = dstr(f) < b[0] ? b[0] : dstr(f);
+  }
   document.querySelectorAll("#tfPresets button").forEach(x => x.classList.toggle("on", x.dataset.tf === tf));
   render(store);
 }
@@ -520,13 +541,8 @@ function init() {
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenus(); });
 
-  // Date pickers are always populated, even before the first import.
-  buildRangeSelects();
-  const now = new Date();
-  document.getElementById("fromMonth").value = "01";
-  document.getElementById("fromYear").value = String(FLOOR_YEAR);
-  document.getElementById("toMonth").value = String(Math.min(12, now.getMonth() + 1)).padStart(2, "0");
-  document.getElementById("toYear").value = String(Math.min(MAX_YEAR, Math.max(FLOOR_YEAR, now.getFullYear())));
+  // Day-level date range inputs, populated before the first import.
+  syncRangeInputs();
   const file = document.getElementById("file"), pick = () => file.click();
   document.getElementById("importBtn").addEventListener("click", pick);
   document.getElementById("importBtn2").addEventListener("click", pick);
@@ -539,7 +555,7 @@ function init() {
   document.getElementById("pngBtn").addEventListener("click", () => { closeMenus(); sharePNG(); });
   document.getElementById("pdfBtn").addEventListener("click", () => { closeMenus(); window.print(); });
 
-  document.getElementById("reset").addEventListener("click", () => { closeMenus(); if (confirm("Reset all data? This clears the stored history AND import log in this browser and cannot be undone. Back up first if unsure.")) { localStorage.removeItem(STORE_KEY); localStorage.removeItem(IMPORTS_KEY); location.reload(); } });
+  document.getElementById("reset").addEventListener("click", () => { closeMenus(); if (confirm("Reset all data? This clears the stored history AND import log in this browser and cannot be undone. Back up first if unsure.")) { localStorage.removeItem(STORE_KEY); localStorage.removeItem(IMPORTS_KEY); localStorage.setItem("impl_trends_demo_off", "1"); location.reload(); } });
   document.getElementById("backup").addEventListener("click", () => { closeMenus();
     const blob = new Blob([localStorage.getItem(STORE_KEY) || JSON.stringify(blankStore())], { type: "application/json" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "implementation-trends-history.json"; a.click(); });
@@ -548,8 +564,8 @@ function init() {
   hf.addEventListener("change", e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader();
     r.onload = ev => { try { const s = JSON.parse(ev.target.result); saveStore(s); viewRange = { from: null, to: null }; render(s); toast("History restored."); } catch { toast("Not a valid history file.", true); } }; r.readAsText(f); hf.value = ""; });
 
-  ["fromMonth", "fromYear", "toMonth", "toYear"].forEach(id =>
-    document.getElementById(id).addEventListener("change", () => { const r = rangeFromSelects(); viewRange.from = r.from; viewRange.to = r.to; document.querySelectorAll("#tfPresets button").forEach(x => x.classList.remove("on")); render(loadStore()); }));
+  ["fromDate", "toDate"].forEach(id =>
+    document.getElementById(id).addEventListener("change", () => { const r = rangeFromInputs(); if (!r) return; viewRange.from = r.from; viewRange.to = r.to; document.querySelectorAll("#tfPresets button").forEach(x => x.classList.remove("on")); render(loadStore()); }));
   document.querySelectorAll("#tfPresets button").forEach(b => b.addEventListener("click", () => setTF(b.dataset.tf)));
   document.querySelectorAll("#cohortSel button").forEach(b => b.addEventListener("click", () => {
     cohort = b.dataset.c;
@@ -566,6 +582,20 @@ function init() {
   document.getElementById("hpClose").addEventListener("click", () => document.getElementById("histPreview").classList.add("hidden"));
   document.getElementById("hpExport").addEventListener("click", () => { const i = +document.getElementById("histPreview").dataset.idx; exportImport(i); });
 
-  render(loadStore());
+  const demoBtn = document.getElementById("demoBtn");
+  if (demoBtn) demoBtn.addEventListener("click", () => { localStorage.removeItem("impl_trends_demo_off"); loadDemo(); });
+
+  const s0 = loadStore();
+  if (!s0.lastImport && !localStorage.getItem("impl_trends_demo_off")) loadDemo();
+  else render(s0);
+}
+function loadDemo() {                                     // bundled sample so the demo experience works out of the box
+  fetch("sample-data.csv").then(r => { if (!r.ok) throw 0; return r.text(); }).then(text => {
+    const records = normalize(parseCSV(text));
+    const store = applyImport(loadStore(), records, "2026-07");
+    store.demo = true; saveStore(store);
+    logImport({ fileName: "sample-data.csv (demo)", importedAt: new Date().toISOString(), snapMonth: "2026-07", records: records.length, older: false, csv: text });
+    showView("dash");
+  }).catch(() => render(loadStore()));
 }
 document.addEventListener("DOMContentLoaded", init);

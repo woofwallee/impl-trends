@@ -13,6 +13,19 @@ bundled locally so the app has no runtime dependency and works offline). Push al
 - **Where work is piling up** — top stages by avg days sitting, with month-over-month
   change. Point-in-time; builds up as imports accumulate.
 
+## The export the app expects (records, not a report)
+CRM → Implementations → All records → Export → **CSV**, include **All properties on
+records**, open **and** closed, no filters. Name it `implementations_YYYY-MM-DD.csv`.
+The Import screen lists the exact required fields and the data assumptions
+(durations in HubSpot milliseconds; live **date** = customer live; **stage** move
+to Live/Complete = exited the pipeline).
+
+The app ships with bundled sample data (`sample-data.csv`) that auto-loads on
+first launch for demos — Reset clears it, then import a real export.
+
+Any date range works — the pickers are day-level (weeks, quarters, custom), and
+every panel recomputes with a comparison against the equal-length prior period.
+
 ## Monthly use (Andrew)
 1. In HubSpot, export all Implementation records (open + closed) with these columns,
    saved as `implementations_YYYY-MM-01.csv`:
