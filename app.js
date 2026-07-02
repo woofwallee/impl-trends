@@ -162,7 +162,6 @@ function applyImport(store, records, snap) {
     store.m2 = { all: m2History(records), "CAREpoint": m2History(byType("CAREpoint")), "e-Bridge": m2History(byType("e-Bridge")) };
     store.stageDaily = { all: buildStageDaily(records), "CAREpoint": buildStageDaily(byType("CAREpoint")), "e-Bridge": buildStageDaily(byType("e-Bridge")) };
     store.pendingClose = pendingClose(records, snap);
-    store.pendingDaily = { all: pendingDaily(records), "CAREpoint": pendingDaily(byType("CAREpoint")), "e-Bridge": pendingDaily(byType("e-Bridge")) };
     store.asOfMonth = snap;
   }
   store.lastImport = { month: snap, records: records.length, when: new Date().toISOString(), older: !!older };
@@ -285,6 +284,10 @@ function render(store) {
     { label: "Open implementations (backlog)", icon: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>', val: cur.total, pill: pill(totalDelta, true), foot: prevLbl ? "vs prior period" : "open now" },
     { label: "CAREpoint open", icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/>', val: cur["CAREpoint"] || 0, pill: pill(prevRow ? (cur["CAREpoint"] || 0) - (prevRow["CAREpoint"] || 0) : null, true), foot: "vs prior period" },
     { label: "e-Bridge open", icon: '<path d="M4 7h16M4 12h16M4 17h10"/>', val: cur["e-Bridge"] || 0, pill: pill(prevRow ? (cur["e-Bridge"] || 0) - (prevRow["e-Bridge"] || 0) : null, true), foot: "vs prior period" },
+    (() => { const pc = store.pendingClose || []; const stale = pc.filter(p => p.days > 30).length; const worst = pc.length ? pc[0].days : 0;
+      return { label: "Live, pending close", icon: '<circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/>', val: pc.length,
+        pill: stale ? `<span class="pill bad">${stale} over 30d</span>` : (pc.length ? `<span class="pill flat">none stale</span>` : ""),
+        foot: pc.length ? `longest ${worst} days since live` : "no one waiting on close-out" }; })(),
   ];
   document.getElementById("kpis").innerHTML = kpis.map(k => `<div class="card kpi">
     <div class="kl">${k.label}<span class="ki"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px">${k.icon}</svg></span></div>
@@ -314,7 +317,7 @@ function render(store) {
     document.querySelector("#sec-speed h3").textContent = "Time to go-live" + cohortLabel();
     document.getElementById("speedNow").textContent = speedTo;
     document.getElementById("speedPill").innerHTML = pill(speedDelta, true) + (speedDelta != null ? ` <span style="font-size:12px;color:var(--hint)">vs prior period</span>` : "");
-    areaChart("speedChart", m2cropKeys.map(k => ({ m: k, v: m2c[k] })), 240);
+    areaChart("speedChart", m2cropKeys.map(k => ({ m: k, v: m2c[k] })), 110);
     document.getElementById("speedCap").textContent = `${speedTo} days average for go-lives in the selected period` +
       (speedDelta != null ? (speedDelta < 0 ? ` — ${Math.abs(speedDelta)} faster than the prior period.` : speedDelta > 0 ? ` — ${speedDelta} slower than the prior period.` : " — unchanged from the prior period.") : ".");
   } else {
@@ -323,21 +326,6 @@ function render(store) {
     document.getElementById("speedPill").innerHTML = "";
     document.getElementById("speedCap").textContent = "No completed implementations in the selected range.";
   }
-
-  // live-pending-close — timeline of how many sit in the bucket (no individual customers shown)
-  const STALE_DAYS = 30;
-  const pcAll = (store.pendingClose || []).filter(p => cohort === "all" || (p.types || []).includes(cohort));
-  document.querySelector("#sec-pending h3").textContent = "Live, pending close" + cohortLabel();
-  const stale = pcAll.filter(p => p.days > STALE_DAYS).length;
-  document.getElementById("pendPill").innerHTML = pcAll.length
-    ? `<span class="pill ${stale ? "bad" : "flat"}">${pcAll.length} in bucket${stale ? ` · ${stale} over ${STALE_DAYS}d` : ""}</span>` : "";
-  const pdMapAll = store.pendingDaily && store.pendingDaily.all ? store.pendingDaily : { all: store.pendingDaily || [] };
-  const pd = (pdMapAll[cohort] || []).filter(p => inDayRange(p.date));
-  areaChart("pendChart", pd.map(p => ({ m: p.date, v: p.v })), 160, fmtDay);
-  const worst = pcAll.length ? pcAll[0].days : 0;
-  document.getElementById("pendCap").textContent = pcAll.length
-    ? `${pcAll.length} customer${pcAll.length === 1 ? " is" : "s are"} live awaiting close-out today${stale ? ` — ${stale} for more than ${STALE_DAYS} days (longest ${worst}d)` : ""}. A rising line means close-outs are falling behind go-lives.`
-    : "No one is waiting on close-out. Clean.";
 
   // stage feature — TradingView watchlist + DAILY price chart, reconstructed from stage entered/exited dates
   const sd = sdSel(store);                              // respects the cohort filter (All / CAREpoint / e-Bridge)
