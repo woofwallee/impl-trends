@@ -120,6 +120,11 @@ function pendingDaily(records) {                        // DAILY count of live-b
   }
   return out; }
 function m4GoLives(records) { const b = {}; for (const r of records) if (r.liveDate) b[dstr(r.liveDate)] = (b[dstr(r.liveDate)] || 0) + 1; return b; }  // by DAY
+function m2Daily(records) {                             // PO->live durations by go-live DAY {sum,n} — window averages are record-weighted and exact
+  const b = {};
+  for (const r of records) { if (!r.liveDate) continue; let d = r.poToLiveDays; if (d == null && r.poDate) d = Math.round((r.liveDate - r.poDate) / MS_PER_DAY);
+    if (d == null || d < 0) continue; const k = dstr(r.liveDate); (b[k] ||= { s: 0, n: 0 }); b[k].s += d; b[k].n++; }
+  return b; }
 
 function buildStageDaily(records) {                    // daily avg-days-in-stage per stage, from entered/exited dates
   const stages = CONFIG.pipelineStages.filter(s => s !== LIVE_STAGE);
@@ -160,6 +165,7 @@ function applyImport(store, records, snap) {
     store.m3 = m3Daily(records);
     store.m4 = { all: m4GoLives(records), "CAREpoint": m4GoLives(byType("CAREpoint")), "e-Bridge": m4GoLives(byType("e-Bridge")) };
     store.m2 = { all: m2History(records), "CAREpoint": m2History(byType("CAREpoint")), "e-Bridge": m2History(byType("e-Bridge")) };
+    store.m2d = { all: m2Daily(records), "CAREpoint": m2Daily(byType("CAREpoint")), "e-Bridge": m2Daily(byType("e-Bridge")) };
     store.stageDaily = { all: buildStageDaily(records), "CAREpoint": buildStageDaily(byType("CAREpoint")), "e-Bridge": buildStageDaily(byType("e-Bridge")) };
     store.pendingClose = pendingClose(records, snap);
     store.pendingDaily = pendingDaily(records);
@@ -175,6 +181,7 @@ function pill(d, lowerBetter) { if (d == null) return `<span class="pill flat">n
   const down = d < 0, ok = lowerBetter ? down : !down; return `<span class="pill ${ok ? "good" : "bad"}">${down ? "&#9660;" : "&#9650;"} ${Math.abs(d)}</span>`; }
 function m4Map(store) { const m = store.m4 || {}; return m.all ? m : { all: m }; }                 // legacy stores wrap as all
 function m4Sel(store) { return m4Map(store)[cohort] || {}; }
+function m2dSel(store) { return (store.m2d || {})[cohort] || {}; }                                 // absent on legacy stores (self-heal rebuilds)
 function dataDayBounds(store) {                          // [firstDay, lastDay] across every series
   const days = [];
   (store.m3 || []).forEach(r => days.push(r.date));
@@ -212,13 +219,14 @@ function areaChart(id, pts, height, labelFmt) {
       scales: { x: { grid: { display: false }, ticks: { color: tc.tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 7, callback: function (v) { return labelFmt(this.getLabelForValue(v)); } } },
         y: { grid: { color: tc.grid, drawBorder: false }, ticks: { color: tc.tick, maxTicksLimit: 5 }, beginAtZero: true } } } });
 }
-function barChart(id, pts) {
+function barChart(id, pts, fmt, bucket) {
+  fmt = fmt || fmtMonth; bucket = bucket || "month";
   destroy(id); const el = document.getElementById(id); if (!el) return; const tc = themeColors();
   charts[id] = new Chart(el, { type: "bar",
     data: { labels: pts.map(p => p.m), datasets: [{ data: pts.map(p => p.v), backgroundColor: tc.line, borderRadius: 5, borderSkipped: false, barPercentage: .7, categoryPercentage: .8 }] },
     options: { responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { callbacks: { title: c => fmtMonth(c[0].label), label: c => ` ${c.parsed.y} go-lives` } } },
-      scales: { x: { grid: { display: false }, ticks: { color: tc.tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 8, callback: function (v) { return this.getLabelForValue(v).slice(2); } } },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { title: c => (bucket === "week" ? "Week of " : "") + fmt(c[0].label), label: c => ` ${c.parsed.y} go-live${c.parsed.y === 1 ? "" : "s"}` } } },
+      scales: { x: { grid: { display: false }, ticks: { color: tc.tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 8, callback: function (v) { const l = this.getLabelForValue(v); return bucket === "month" ? l.slice(2) : fmt(l).replace(/, \d+$/, ""); } } },
         y: { grid: { color: tc.grid, drawBorder: false }, ticks: { color: tc.tick, maxTicksLimit: 5, precision: 0 }, beginAtZero: true } } } });
 }
 
@@ -268,29 +276,54 @@ function render(store) {
   const hasWin = win.length > 0;                          // a window with no data shows zeros — never the latest state
   const cur = hasWin ? win[win.length - 1] : { total: 0, "CAREpoint": 0, "e-Bridge": 0 };
   let prevRow = null; if (hasWin && priorHasData) for (const r of m3) { if (r.date <= pTo) prevRow = r; else break; }   // state at end of prior window
-  const prevLbl = prevRow ? "prior period (ended " + fmtDay(prevRow.date) + ")" : null;
   const backlogDelta = prevRow ? bl(cur) - bl(prevRow) : null;
 
-  // go-lives: cohort-filtered daily counts -> monthly bars within the window; compare = window total vs prior-window total
+  // Comparisons adapt to the window: 7 days reads week-over-week, ~30 month-over-month, ~365 year-over-year.
+  const winLen = Math.round((new Date(viewRange.to + "T00:00:00Z") - new Date(viewRange.from + "T00:00:00Z")) / MS_PER_DAY) + 1;
+  const priorName = winLen === 7 ? "prior week" : (winLen >= 28 && winLen <= 31) ? "prior month"
+    : (winLen >= 90 && winLen <= 92) ? "prior quarter" : (winLen >= 365 && winLen <= 366) ? "prior year" : "prior period";
+
+  // go-lives: cohort-filtered daily counts -> bars bucketed to the window (day/week/month); compare = window total vs prior-window total
+  const glBucket = winLen <= 45 ? "day" : winLen <= 200 ? "week" : "month";
+  const glKey = d => glBucket === "day" ? d : glBucket === "month" ? d.slice(0, 7)
+    : (() => { const dt = new Date(d + "T00:00:00Z"); return dstr(new Date(dt.getTime() - ((dt.getUTCDay() + 6) % 7) * MS_PER_DAY)); })();   // Monday of that week
+  const glFmt = k => glBucket === "month" ? fmtMonth(k) : fmtDay(k);
   const m4c = m4Sel(store);
-  const glMonthly = {}; let glWinTotal = 0, glPrevTotal = 0;
+  const glBuckets = {}; let glWinTotal = 0, glPrevTotal = 0;
   Object.entries(m4c).forEach(([d, c]) => {
-    if (inDayRange(d)) { const mk = d.slice(0, 7); glMonthly[mk] = (glMonthly[mk] || 0) + c; glWinTotal += c; }
+    if (inDayRange(d)) { const k = glKey(d); glBuckets[k] = (glBuckets[k] || 0) + c; glWinTotal += c; }
     else if (d >= pFrom && d <= pTo) glPrevTotal += c;
   });
-  const glKeys = Object.keys(glMonthly).sort();
+  if (glWinTotal) {                                       // zero-fill empty buckets so the bar axis represents elapsed time honestly
+    for (let d = new Date(viewRange.from + "T00:00:00Z"), glEnd = new Date(viewRange.to + "T00:00:00Z"); d <= glEnd; d = addDay(d)) {
+      const k = glKey(dstr(d)); if (!(k in glBuckets)) glBuckets[k] = 0;
+    }
+  }
+  const glKeys = Object.keys(glBuckets).sort();
   const goliveDelta = priorHasData ? glWinTotal - glPrevTotal : null;
 
-  const m2c = m2Sel(store);                              // cohort-filtered PO->go-live months
+  const m2c = m2Sel(store);                              // monthly averages (chart line + legacy fallback)
   const m2cropKeys = Object.keys(m2c).filter(inRange).sort();
-  const speedTo = m2cropKeys.length ? Math.round(mean(m2cropKeys.map(k => m2c[k]))) : null;   // window average
-  const m2prevKeys = Object.keys(m2c).filter(m => { const [y, mo] = m.split("-").map(Number); const last = new Date(Date.UTC(y, mo, 0)).getUTCDate(); return (m + "-01") <= pTo && (m + "-" + String(last).padStart(2, "0")) >= pFrom; }).sort();
-  const speedPrevV = m2prevKeys.length ? Math.round(mean(m2prevKeys.map(k => m2c[k]))) : null;
+  const m2dc = m2dSel(store);                            // day-level {sum,n} -> exact record-weighted window averages
+  let speedTo = null, speedPrevV = null;
+  if (Object.keys(m2dc).length) {
+    let s = 0, n = 0, ps = 0, pn = 0;
+    Object.entries(m2dc).forEach(([d, v]) => {
+      if (inDayRange(d)) { s += v.s; n += v.n; }
+      else if (d >= pFrom && d <= pTo) { ps += v.s; pn += v.n; }
+    });
+    speedTo = n ? Math.round(s / n) : null;
+    speedPrevV = pn ? Math.round(ps / pn) : null;
+  } else {                                               // legacy store without day-level durations: month-bucket approximation
+    speedTo = m2cropKeys.length ? Math.round(mean(m2cropKeys.map(k => m2c[k]))) : null;
+    const m2prevKeys = Object.keys(m2c).filter(m => { const [y, mo] = m.split("-").map(Number); const last = new Date(Date.UTC(y, mo, 0)).getUTCDate(); return (m + "-01") <= pTo && (m + "-" + String(last).padStart(2, "0")) >= pFrom; }).sort();
+    speedPrevV = m2prevKeys.length ? Math.round(mean(m2prevKeys.map(k => m2c[k]))) : null;
+  }
   const speedDelta = (priorHasData && speedTo != null && speedPrevV != null) ? speedTo - speedPrevV : null;
 
   // KPIs — levels measured at the END of the selected period; deltas vs the end of the prior equal-length window
   const totalDelta = prevRow ? cur.total - prevRow.total : null;
-  const stockFoot = hasWin ? "open at end of period · vs prior period" : "no data in selected range";
+  const stockFoot = hasWin ? `open at end of period · vs ${priorName}` : "no data in selected range";
   const kpis = [
     { label: "Open implementations (backlog)", icon: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>', val: cur.total, pill: pill(totalDelta, true), foot: stockFoot },
     { label: "CAREpoint open", icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/>', val: cur["CAREpoint"] || 0, pill: pill(prevRow ? (cur["CAREpoint"] || 0) - (prevRow["CAREpoint"] || 0) : null, true), foot: stockFoot },
@@ -309,7 +342,7 @@ function render(store) {
       return { label: "Live, pending close", icon: '<circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/>', val,
         pill: pill(delta, true),
         foot: atLatest ? (val ? (stale ? `${stale} over 30d · longest ${worst}d since live` : "none stale") : "no one waiting on close-out")
-                       : "at end of period · vs prior period" }; })(),
+                       : `at end of period · vs ${priorName}` }; })(),
   ];
   document.getElementById("kpis").innerHTML = kpis.map((k, i) => `<div class="card kpi" data-share="kpi-${i}">
     <div class="kl">${k.label}<span class="ki"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px">${k.icon}</svg></span></div>
@@ -318,7 +351,7 @@ function render(store) {
   // backlog — daily line within window, under the cohort filter
   document.getElementById("backlogNow").textContent = bl(cur).toLocaleString() + (cohort === "all" ? "" : "");
   document.querySelector("#sec-backlog h3").textContent = "Open pipeline trend (backlog)" + cohortLabel();
-  document.getElementById("backlogPill").innerHTML = pill(backlogDelta, true) + (prevLbl ? ` <span style="font-size:12px;color:var(--hint)">vs ${prevLbl}</span>` : "");
+  document.getElementById("backlogPill").innerHTML = pill(backlogDelta, true) + (prevRow ? ` <span style="font-size:12px;color:var(--hint)">vs ${priorName} (ended ${fmtDay(prevRow.date)})</span>` : "");
   const wt = windowTrend(win.map(bl));
   document.getElementById("backlogTrend").innerHTML = !wt ? "" :
     wt.kind === "up" ? `<span class="pill bad" style="font-size:13px;padding:3px 10px">&#9650; Rising over this period</span>` :
@@ -326,13 +359,13 @@ function render(store) {
     `<span class="pill flat" style="font-size:13px;padding:3px 10px">&#9644; Flat over this period</span>`;
   areaChart("backlogChart", win.map(r => ({ m: r.date, v: bl(r) })), 220, fmtDay);
 
-  // go-lives per month — window bars + prior-period comparison
-  document.querySelector("#sec-golive h3").textContent = "Go-lives per month" + cohortLabel();
+  // go-lives — bars bucketed to the window + prior-period comparison
+  document.querySelector("#sec-golive h3").textContent = `Go-lives per ${glBucket}` + cohortLabel();
   document.getElementById("goliveNow").textContent = glWinTotal.toLocaleString();
-  document.getElementById("golivePill").innerHTML = pill(goliveDelta, false) + (goliveDelta != null ? ` <span style="font-size:12px;color:var(--hint)">vs prior period</span>` : "");
-  barChart("goliveChart", glKeys.map(k => ({ m: k, v: glMonthly[k] })));
+  document.getElementById("golivePill").innerHTML = pill(goliveDelta, false) + (goliveDelta != null ? ` <span style="font-size:12px;color:var(--hint)">vs ${priorName}</span>` : "");
+  barChart("goliveChart", glKeys.map(k => ({ m: k, v: glBuckets[k] })), glFmt, glBucket);
   document.getElementById("goliveCap").textContent = glWinTotal
-    ? `${glWinTotal} implementation${glWinTotal === 1 ? "" : "s"} went live in the selected period` + (goliveDelta != null ? ` — ${goliveDelta >= 0 ? goliveDelta + " more" : Math.abs(goliveDelta) + " fewer"} than the ${Math.round((new Date(viewRange.to + "T00:00:00Z") - new Date(viewRange.from + "T00:00:00Z")) / MS_PER_DAY) + 1} days before.` : ".")
+    ? `${glWinTotal} implementation${glWinTotal === 1 ? "" : "s"} went live in the selected period` + (goliveDelta != null ? ` — ${goliveDelta >= 0 ? goliveDelta + " more" : Math.abs(goliveDelta) + " fewer"} than the ${winLen} days before.` : ".")
     : "No go-lives in the selected period.";
   document.getElementById("breakdown").style.display = cohort === "all" ? "" : "none";
   const bdTot = cur.total || 1;
@@ -344,10 +377,14 @@ function render(store) {
   if (speedTo != null) {
     document.querySelector("#sec-speed h3").textContent = "Time to go-live" + cohortLabel();
     document.getElementById("speedNow").textContent = speedTo;
-    document.getElementById("speedPill").innerHTML = pill(speedDelta, true) + (speedDelta != null ? ` <span style="font-size:12px;color:var(--hint)">vs prior period</span>` : "");
-    areaChart("speedChart", m2cropKeys.map(k => ({ m: k, v: m2c[k] })), 110);
+    document.getElementById("speedPill").innerHTML = pill(speedDelta, true) + (speedDelta != null ? ` <span style="font-size:12px;color:var(--hint)">vs ${priorName}</span>` : "");
+    if (Object.keys(m2dc).length) {                      // chart uses the same window + buckets as the headline, so they always agree
+      const spB = {};
+      Object.entries(m2dc).forEach(([d, v]) => { if (!inDayRange(d)) return; const k = glKey(d); (spB[k] ||= { s: 0, n: 0 }); spB[k].s += v.s; spB[k].n += v.n; });
+      areaChart("speedChart", Object.keys(spB).sort().map(k => ({ m: k, v: Math.round(spB[k].s / spB[k].n) })), 110, glFmt);
+    } else areaChart("speedChart", m2cropKeys.map(k => ({ m: k, v: m2c[k] })), 110);   // legacy store: monthly line
     document.getElementById("speedCap").textContent = `${speedTo} days average for go-lives in the selected period` +
-      (speedDelta != null ? (speedDelta < 0 ? ` — ${Math.abs(speedDelta)} faster than the prior period.` : speedDelta > 0 ? ` — ${speedDelta} slower than the prior period.` : " — unchanged from the prior period.") : ".");
+      (speedDelta != null ? (speedDelta < 0 ? ` — ${Math.abs(speedDelta)} faster than the ${priorName}.` : speedDelta > 0 ? ` — ${speedDelta} slower than the ${priorName}.` : ` — unchanged from the ${priorName}.`) : ".");
   } else {
     destroy("speedChart");
     document.getElementById("speedNow").textContent = "—";
@@ -477,7 +514,7 @@ const SHARE_CARDS = [
   { id: "kpi-3", label: "Live, pending close — number" },
   { id: "sec-backlog", label: "Open pipeline trend (backlog)" },
   { id: "sec-speed", label: "Time to go-live" },
-  { id: "sec-golive", label: "Go-lives per month" },
+  { id: "sec-golive", label: "Go-lives" },
   { id: "sec-stage", label: "Time in stage" },
 ];
 function shareEl(id) { return id.startsWith("kpi-") ? document.querySelector(`[data-share="${id}"]`) : document.getElementById(id); }
@@ -673,13 +710,19 @@ function init() {
   if (demoBtn) demoBtn.addEventListener("click", () => { localStorage.removeItem("impl_trends_demo_off"); loadDemo(); });
 
   let s0 = loadStore();
-  // Self-heal stores written by older app versions: rebuild from the last imported file kept in Import history
-  if (s0.lastImport && !s0.pendingDaily) {
-    const imp = loadImports().find(e => e.csv);
-    if (imp) { try {
+  // Self-heal stores written by older app versions: replay the retained Import-history files in snapshot order.
+  // Guarded by a fingerprint (store's own lastImport must match a history entry) so a restored backup is never
+  // clobbered by unrelated files sitting in this browser's history; unmatched stores just use the legacy fallbacks.
+  if (s0.lastImport && (!s0.pendingDaily || !s0.m2d)) {
+    const imps = loadImports().filter(e => e.csv);
+    const matches = imps.some(e => e.snapMonth === s0.lastImport.month && e.records === s0.lastImport.records);
+    if (imps.length && matches) { try {
       const wasDemo = !!s0.demo;
-      s0 = applyImport(blankStore(), normalize(parseCSV(imp.csv)), imp.snapMonth);
-      s0.demo = wasDemo; saveStore(s0);
+      let rebuilt = blankStore();
+      [...imps].sort((a, b) => (a.snapMonth || "").localeCompare(b.snapMonth || ""))
+        .forEach(e => { rebuilt = applyImport(rebuilt, normalize(parseCSV(e.csv)), e.snapMonth); });
+      rebuilt.demo = wasDemo;
+      s0 = rebuilt; saveStore(s0);
     } catch (e) { } }
   }
   if (!s0.lastImport && !localStorage.getItem("impl_trends_demo_off")) loadDemo();
