@@ -208,16 +208,35 @@ function themeColors() { const dark = document.documentElement.getAttribute("dat
 /* ---------- charts ---------- */
 const charts = {};
 function destroy(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+// TradingView-style last-value marker: dotted line at the latest value, end dot, and a price-style label on the right axis
+const lastValue = { id: "lastval", afterDatasetsDraw(c) {
+  const ds = c.data.datasets[0]; if (!ds || c.config.type !== "line") return;
+  let i = ds.data.length - 1; while (i >= 0 && ds.data[i] == null) i--;
+  if (i < 0) return;
+  const pt = c.getDatasetMeta(0).data[i]; if (!pt) return;
+  const { left, right } = c.chartArea, y = pt.y, ctx = c.ctx, col = ds.borderColor;
+  ctx.save();
+  ctx.setLineDash([2, 3]); ctx.strokeStyle = col; ctx.globalAlpha = .55; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+  ctx.setLineDash([]); ctx.globalAlpha = 1;
+  ctx.fillStyle = col; ctx.beginPath(); ctx.arc(pt.x, y, 3, 0, Math.PI * 2); ctx.fill();
+  const txt = String(ds.data[i]); ctx.font = "600 10.5px Inter, system-ui, sans-serif";
+  const w = ctx.measureText(txt).width + 10, h = 17;
+  ctx.beginPath(); ctx.roundRect(right + 1, y - h / 2, w, h, 4); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.textBaseline = "middle"; ctx.fillText(txt, right + 6, y + .5);
+  ctx.restore();
+} };
+
 function areaChart(id, pts, height, labelFmt) {
   labelFmt = labelFmt || fmtMonth;
   destroy(id); const el = document.getElementById(id); if (!el) return; const tc = themeColors();
-  const g = el.getContext("2d").createLinearGradient(0, 0, 0, height || 220); g.addColorStop(0, tc.line + "33"); g.addColorStop(1, tc.line + "00");
   charts[id] = new Chart(el, { type: "line",
-    data: { labels: pts.map(p => p.m), datasets: [{ data: pts.map(p => p.v), borderColor: tc.line, backgroundColor: g, borderWidth: 2.5, fill: true, tension: .38, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: tc.line, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2 }] },
-    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+    data: { labels: pts.map(p => p.m), datasets: [{ data: pts.map(p => p.v), borderColor: tc.line, borderWidth: 1.6, fill: false, tension: 0, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: tc.line, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2 }] },
+    options: { responsive: true, maintainAspectRatio: false, devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2), interaction: { mode: "index", intersect: false },
       plugins: { legend: { display: false }, tooltip: { callbacks: { title: c => labelFmt(c[0].label), label: c => ` ${c.parsed.y}` } } },
       scales: { x: { grid: { display: false }, ticks: { color: tc.tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 7, callback: function (v) { return labelFmt(this.getLabelForValue(v)); } } },
-        y: { grid: { color: tc.grid, drawBorder: false }, ticks: { color: tc.tick, maxTicksLimit: 5 }, beginAtZero: true } } } });
+        y: { position: "right", grid: { color: tc.grid, drawBorder: false }, ticks: { color: tc.tick, maxTicksLimit: 5 }, beginAtZero: true } } },
+    plugins: [crosshair, lastValue] });
 }
 function barChart(id, pts, fmt, bucket) {
   fmt = fmt || fmtMonth; bucket = bucket || "month";
@@ -449,10 +468,9 @@ function render(store) {
     const wdays = wi.map(o => o.d), arr = wi.map(o => fullArr[o.i]);
     const col = sel.t.kind === "up" ? BAD : (sel.t.kind === "down" || sel.t.kind === "cleared") ? GOOD : BLUE;
     const tc = themeColors(), el = document.getElementById("stageBig");
-    const g = el.getContext("2d").createLinearGradient(0, 0, 0, 300); g.addColorStop(0, col + "33"); g.addColorStop(1, col + "00");
     charts["stageBig"] = new Chart(el, {
       type: "line",
-      data: { labels: wdays, datasets: [{ data: arr, borderColor: col, backgroundColor: g, borderWidth: 2, fill: true, stepped: true, tension: 0, spanGaps: false, pointRadius: 0, pointHoverRadius: 5, pointBackgroundColor: col, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2 }] },
+      data: { labels: wdays, datasets: [{ data: arr, borderColor: col, borderWidth: 1.6, fill: false, stepped: true, tension: 0, spanGaps: false, pointRadius: 0, pointHoverRadius: 5, pointBackgroundColor: col, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2 }] },
       options: { responsive: true, maintainAspectRatio: false, devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2), interaction: { mode: "index", intersect: false },
         onHover: (e, els) => { const c = charts["stageBig"]; if (!c) return; const pr = document.getElementById("cpPrice"), ro = document.getElementById("cpReadout");
           if (els && els.length) { const i = els[0].index, v = c.data.datasets[0].data[i], d = c.data.labels[i];
@@ -460,8 +478,8 @@ function render(store) {
         plugins: { legend: { display: false }, tooltip: { callbacks: { title: c => fmtDay(c[0].label), label: c => c.parsed.y == null ? " no open work" : ` ${c.parsed.y} days` } },
           zoom: { pan: { enabled: true, mode: "x" }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" } } },
         scales: { x: { grid: { display: false }, ticks: { color: tc.tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 8, callback: function (v) { return fmtDay(this.getLabelForValue(v)); } } },
-          y: { grid: { color: tc.grid, drawBorder: false }, ticks: { color: tc.tick, maxTicksLimit: 5 }, beginAtZero: true } } },
-      plugins: [crosshair],
+          y: { position: "right", grid: { color: tc.grid, drawBorder: false }, ticks: { color: tc.tick, maxTicksLimit: 5 }, beginAtZero: true } } },
+      plugins: [crosshair, lastValue],
     });
     el.onmouseleave = () => { document.getElementById("cpPrice").textContent = sel.cur != null ? sel.cur + "d" : "—"; document.getElementById("cpReadout").textContent = ""; };
     el.ondblclick = () => { if (charts["stageBig"]) charts["stageBig"].resetZoom(); };
