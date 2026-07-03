@@ -156,11 +156,11 @@
 <body>
 <div class="app">
   <aside class="side">
-    <div class="brand"><div class="mk">IT</div><div><b>Impl Trends</b><span>General Devices</span></div></div>
+    <div class="brand"><div class="mk">CS</div><div><b>CS DASHBOARD</b><span>General Devices</span></div></div>
     <nav class="nav">
       <a class="on" data-goto="kpis"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Dashboard</a>
       <a data-goto="sec-backlog"><svg class="ic" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>Open pipeline (backlog)</a>
-      <a data-goto="sec-speed"><svg class="ic" viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>Time to go-live</a>
+      <a data-goto="sec-speed"><svg class="ic" viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>PO to go-live</a>
       <a data-goto="sec-stage"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Stage times</a>
       <a data-view="history"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 109-9 9.7 9.7 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>Import history</a>
     </nav>
@@ -170,7 +170,7 @@
 
   <main class="main">
     <div class="top">
-      <div><h1>Dashboard</h1><div class="sub" id="subtitle">Implementation pipeline</div></div>
+      <div><h1>IMPLEMENTATION PIPELINE</h1><div class="sub" id="subtitle"></div></div>
       <div class="tools">
         <span class="tf" id="cohortSel" title="Filter every chart by implementation type">
           <button data-c="all" class="on">All</button><button data-c="CAREpoint">CAREpoint</button><button data-c="e-Bridge">e-Bridge</button>
@@ -245,26 +245,25 @@
     </div>
 
     <div id="dashboard" class="hidden">
-      <div class="scopebar">Implementation pipeline trends — open count (backlog), time in stage, and time to go-live, for any date range. Current snapshots live in the HubSpot Implementation Dashboard.</div>
       <section class="grid-kpi" id="kpis"></section>
 
       <section class="grid-main">
         <div class="card" id="sec-backlog">
-          <div class="row-h"><div><h3>Open pipeline trend (backlog)</h3><p class="ch-sub">Implementations still in progress — open until the record moves to Live/Complete</p></div><div id="backlogPill"></div></div>
+          <div class="row-h"><div><h3>OPEN PIPELINE TREND</h3><p class="ch-sub">Backlog — implementations still in progress, open until the record moves to Live/Complete</p></div><div id="backlogPill"></div></div>
           <div class="hero-n"><span id="backlogNow">0</span><small>open</small><span id="backlogTrend"></span></div>
           <div class="canvas-wrap" style="height:240px"><canvas id="backlogChart"></canvas></div>
           <div class="breakdown" id="breakdown"></div>
         </div>
         <div class="col">
           <div class="card" id="sec-speed">
-            <div class="row-h"><div><h3>Time to go-live</h3><p class="ch-sub">Avg days from PO to customer live</p></div><div id="speedPill"></div></div>
+            <div class="row-h"><div><h3>PO TO GO-LIVE</h3></div><div id="speedPill"></div></div>
             <div class="hero-n" style="font-size:26px;margin:8px 0 2px"><span id="speedNow">—</span><small>days</small></div>
             <div class="canvas-wrap" style="height:110px"><canvas id="speedChart"></canvas></div>
             <div id="speedCap" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
           </div>
           <div class="card" id="sec-golive">
-            <div class="row-h"><div><h3>Go-lives</h3><p class="ch-sub">Counted by their live date</p></div><div id="golivePill"></div></div>
-            <div class="hero-n" style="font-size:26px;margin:8px 0 2px"><span id="goliveNow">0</span><small>in period</small></div>
+            <div class="row-h"><div><h3>GO-LIVES</h3><p class="ch-sub" id="goliveSub">How many implementations went live</p></div><div id="golivePill"></div></div>
+            <div class="hero-n" style="font-size:26px;margin:8px 0 2px"><span id="goliveNow">0</span><small>went live</small></div>
             <div class="canvas-wrap" style="height:110px"><canvas id="goliveChart"></canvas></div>
             <div id="goliveCap" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
           </div>
@@ -272,7 +271,7 @@
       </section>
 
       <section class="card" id="sec-stage" style="margin-bottom:16px">
-        <div class="row-h"><div><h3>Time in stage — where open work is piling up</h3><p class="ch-sub">Avg days open work has sat in each stage, over time · ▲ rising = sitting longer (bad) · ▼ falling = moving faster (good) · longest first · click a stage to chart it</p></div><div id="stageSummary" class="mktsum"></div></div>
+        <div class="row-h"><div><h3>TIME IN STAGE</h3><p class="ch-sub">How long open work sits in each stage · 🔴 ▲ rising = slowing down · 🟢 ▼ falling = clearing faster · vs ~30 days earlier · click a stage to chart it</p></div><div id="stageSummary" class="mktsum"></div></div>
         <div class="stage-wrap">
           <div class="wl" id="stageList"></div>
           <div class="chartpane">
@@ -286,6 +285,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script src="app.js"></script>
+<script src="app.js?v=2"></script>
 </body>
 </html>

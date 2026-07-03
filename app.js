@@ -177,7 +177,7 @@ function applyImport(store, records, snap) {
 
 /* ---------- helpers ---------- */
 function fmtMonth(k) { if (!k) return "—"; const [y, m] = k.split("-").map(Number); return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }); }
-function pill(d, lowerBetter) { if (d == null) return `<span class="pill flat">new</span>`; if (d === 0) return `<span class="pill flat">0</span>`;
+function pill(d, lowerBetter) { if (d == null) return `<span class="pill flat">no prior data</span>`; if (d === 0) return `<span class="pill flat">0</span>`;
   const down = d < 0, ok = lowerBetter ? down : !down; return `<span class="pill ${ok ? "good" : "bad"}">${down ? "&#9660;" : "&#9650;"} ${Math.abs(d)}</span>`; }
 function m4Map(store) { const m = store.m4 || {}; return m.all ? m : { all: m }; }                 // legacy stores wrap as all
 function m4Sel(store) { return m4Map(store)[cohort] || {}; }
@@ -350,8 +350,8 @@ function render(store) {
 
   // backlog — daily line within window, under the cohort filter
   document.getElementById("backlogNow").textContent = bl(cur).toLocaleString() + (cohort === "all" ? "" : "");
-  document.querySelector("#sec-backlog h3").textContent = "Open pipeline trend (backlog)" + cohortLabel();
-  document.getElementById("backlogPill").innerHTML = pill(backlogDelta, true) + (prevRow ? ` <span style="font-size:12px;color:var(--hint)">vs ${priorName} (ended ${fmtDay(prevRow.date)})</span>` : "");
+  document.querySelector("#sec-backlog h3").textContent = "OPEN PIPELINE TREND" + cohortLabel();
+  document.getElementById("backlogPill").innerHTML = backlogDelta != null ? pill(backlogDelta, true) + ` <span style="font-size:12px;color:var(--hint)">vs ${priorName} (ended ${fmtDay(prevRow.date)})</span>` : "";
   const wt = windowTrend(win.map(bl));
   document.getElementById("backlogTrend").innerHTML = !wt ? "" :
     wt.kind === "up" ? `<span class="pill bad" style="font-size:13px;padding:3px 10px">&#9650; Rising over this period</span>` :
@@ -360,9 +360,10 @@ function render(store) {
   areaChart("backlogChart", win.map(r => ({ m: r.date, v: bl(r) })), 220, fmtDay);
 
   // go-lives — bars bucketed to the window + prior-period comparison
-  document.querySelector("#sec-golive h3").textContent = `Go-lives per ${glBucket}` + cohortLabel();
+  document.querySelector("#sec-golive h3").textContent = "GO-LIVES" + cohortLabel();
+  document.getElementById("goliveSub").textContent = `How many implementations went live — each bar is one ${glBucket}`;
   document.getElementById("goliveNow").textContent = glWinTotal.toLocaleString();
-  document.getElementById("golivePill").innerHTML = pill(goliveDelta, false) + (goliveDelta != null ? ` <span style="font-size:12px;color:var(--hint)">vs ${priorName}</span>` : "");
+  document.getElementById("golivePill").innerHTML = goliveDelta != null ? pill(goliveDelta, false) + ` <span style="font-size:12px;color:var(--hint)">vs ${priorName}</span>` : "";
   barChart("goliveChart", glKeys.map(k => ({ m: k, v: glBuckets[k] })), glFmt, glBucket);
   document.getElementById("goliveCap").textContent = glWinTotal
     ? `${glWinTotal} implementation${glWinTotal === 1 ? "" : "s"} went live in the selected period` + (goliveDelta != null ? ` — ${goliveDelta >= 0 ? goliveDelta + " more" : Math.abs(goliveDelta) + " fewer"} than the ${winLen} days before.` : ".")
@@ -375,9 +376,9 @@ function render(store) {
 
   // speed to go-live (PO -> live/complete, by go-live month) — also native in HubSpot; here so the monthly story is one page
   if (speedTo != null) {
-    document.querySelector("#sec-speed h3").textContent = "Time to go-live" + cohortLabel();
+    document.querySelector("#sec-speed h3").textContent = "PO TO GO-LIVE" + cohortLabel();
     document.getElementById("speedNow").textContent = speedTo;
-    document.getElementById("speedPill").innerHTML = pill(speedDelta, true) + (speedDelta != null ? ` <span style="font-size:12px;color:var(--hint)">vs ${priorName}</span>` : "");
+    document.getElementById("speedPill").innerHTML = speedDelta != null ? pill(speedDelta, true) + ` <span style="font-size:12px;color:var(--hint)">vs ${priorName}</span>` : "";
     if (Object.keys(m2dc).length) {                      // chart uses the same window + buckets as the headline, so they always agree
       const spB = {};
       Object.entries(m2dc).forEach(([d, v]) => { if (!inDayRange(d)) return; const k = glKey(d); (spB[k] ||= { s: 0, n: 0 }); spB[k].s += v.s; spB[k].n += v.n; });
@@ -394,7 +395,7 @@ function render(store) {
 
   // stage feature — TradingView watchlist + DAILY price chart, reconstructed from stage entered/exited dates
   const sd = sdSel(store);                              // respects the cohort filter (All / CAREpoint / e-Bridge)
-  document.querySelector("#sec-stage h3").textContent = "Time in stage — where open work is piling up" + cohortLabel();
+  document.querySelector("#sec-stage h3").textContent = "TIME IN STAGE" + cohortLabel();
   const sdDays = sd.days || [];
   // List values and badges read at the END of the selected window (not the newest data), so the list agrees with the chart.
   let sdEnd = -1; sdDays.forEach((d, i) => { if (!viewRange.to || d <= viewRange.to) sdEnd = i; });
@@ -473,7 +474,7 @@ function render(store) {
     ? `<span><b style="color:var(--bad)">${up}</b> rising</span><span><b style="color:var(--good)">${down}</b> falling</span><span><b>${flat}</b> flat</span>`
     : `<span>Needs stage date columns in the export</span>`;
 
-  document.getElementById("subtitle").textContent = `Implementation pipeline · ${store.lastImport.records} records · ${fmtDay(viewRange.from)} – ${fmtDay(viewRange.to)}` + (store.demo ? " · SAMPLE DATA — Reset, then import your export" : "");
+  document.getElementById("subtitle").textContent = `${store.lastImport.records.toLocaleString()} records · ${fmtDay(viewRange.from)} – ${fmtDay(viewRange.to)}` + (store.demo ? " · SAMPLE DATA" : "");
 }
 
 function syncRangeInputs() {                              // reflect viewRange into the day-level date inputs
@@ -513,7 +514,7 @@ const SHARE_CARDS = [
   { id: "kpi-2", label: "e-Bridge open — number" },
   { id: "kpi-3", label: "Live, pending close — number" },
   { id: "sec-backlog", label: "Open pipeline trend (backlog)" },
-  { id: "sec-speed", label: "Time to go-live" },
+  { id: "sec-speed", label: "PO to go-live" },
   { id: "sec-golive", label: "Go-lives" },
   { id: "sec-stage", label: "Time in stage" },
 ];
