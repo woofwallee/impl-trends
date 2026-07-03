@@ -25,7 +25,7 @@ const CONFIG = {
   ],
 };
 const MS_PER_DAY = 86400000, STORE_KEY = "impl_trends_history_v1", THEME_KEY = "impl_trends_theme";
-const CP = "#2f6ded", EB = "#ea8a2f", GOOD = "#15803d", BAD = "#dc2626", GRAY = "#9aa2af";
+const CP = "#2f6ded", EB = "#ea8a2f", GOOD = "#15803d", BAD = "#dc2626", GRAY = "#9aa2af", BLUE = "#2f6ded";
 const FLOOR_YEAR = 2025, MAX_YEAR = 2030;   // Implementation object created Aug 2025; picker scales to 2030
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const LIVE_STAGE = "Implementation Live/Complete";
@@ -35,7 +35,7 @@ let cohort = "all";                                      // "all" | "CAREpoint" 
 function m2Map(store) { const m = store.m2 || {}; return m.all ? m : { all: m }; }               // legacy stores wrap as all
 function sdMap(store) { const s = store.stageDaily || {}; return s.all ? s : { all: s }; }
 function m2Sel(store) { return m2Map(store)[cohort] || {}; }
-function sdSel(store) { return sdMap(store)[cohort] || { days: [], series: {}, open: {} }; }
+function sdSel(store) { const v = sdMap(store)[cohort]; return v && v.series ? v : { days: [], series: {}, open: {} }; }
 function cohortLabel() { return cohort === "all" ? "" : " · " + cohort; }
 function addDay(d) { return new Date(d.getTime() + MS_PER_DAY); }
 function dstr(d) { return d.toISOString().slice(0, 10); }
@@ -97,7 +97,7 @@ function m3Daily(records) {                             // open pipeline per DAY
   records.forEach(r => { if (r.createDate) { if (!minD || r.createDate < minD) minD = r.createDate; if (!maxD || r.createDate > maxD) maxD = r.createDate; } if (r.closedDate && (!maxD || r.closedDate > maxD)) maxD = r.closedDate; });
   if (!minD) return [];
   const end = maxD || minD, out = [];
-  for (let d = new Date(Date.UTC(minD.getUTCFullYear(), minD.getUTCMonth(), minD.getUTCDate())); d <= end && out.length < 1500; d = addDay(d)) {
+  for (let d = new Date(Date.UTC(minD.getUTCFullYear(), minD.getUTCMonth(), minD.getUTCDate())); d <= end && out.length < 2600; d = addDay(d)) {   // safety cap ≈ 7 years of daily rows
     const D = d.getTime(), row = { date: dstr(d), total: 0 }; labels.forEach(l => row[l] = 0);
     for (const r of records) { if (!r.createDate || r.createDate.getTime() > D) continue; if (r.closedDate && r.closedDate.getTime() <= D) continue; row.total++; r.types.forEach(t => { if (labels.includes(t)) row[t]++; }); }
     out.push(row);
@@ -113,7 +113,7 @@ function pendingDaily(records) {                        // DAILY count of live-b
   let minD = null, maxD = null;
   withLive.forEach(r => { if (!minD || r.liveDate < minD) minD = r.liveDate; const e = r.closedDate || r.liveDate; if (!maxD || e > maxD) maxD = e; });
   const out = [];
-  for (let d = new Date(Date.UTC(minD.getUTCFullYear(), minD.getUTCMonth(), minD.getUTCDate())); d <= maxD && out.length < 1500; d = addDay(d)) {
+  for (let d = new Date(Date.UTC(minD.getUTCFullYear(), minD.getUTCMonth(), minD.getUTCDate())); d <= maxD && out.length < 2600; d = addDay(d)) {
     const D = d.getTime(); let c = 0;
     for (const r of withLive) { if (r.liveDate.getTime() <= D && (!r.closedDate || r.closedDate.getTime() > D)) c++; }
     out.push({ date: dstr(d), v: c });
@@ -136,7 +136,7 @@ function buildStageDaily(records) {                    // daily avg-days-in-stag
   } });
   if (!minD) return { days: [], series: {}, open };
   const end = maxD || minD;
-  const days = []; for (let d = new Date(Date.UTC(minD.getUTCFullYear(), minD.getUTCMonth(), minD.getUTCDate())); d <= end && days.length < 1200; d = addDay(d)) days.push(dstr(d));
+  const days = []; for (let d = new Date(Date.UTC(minD.getUTCFullYear(), minD.getUTCMonth(), minD.getUTCDate())); d <= end && days.length < 2600; d = addDay(d)) days.push(dstr(d));
   const series = {}; stages.forEach(s => series[s] = new Array(days.length).fill(null));
   days.forEach((ds, di) => { const D = new Date(ds + "T00:00:00Z").getTime();
     stages.forEach(s => { let sum = 0, c = 0;
@@ -265,8 +265,9 @@ function render(store) {
   const m3 = store.m3 || [];                             // daily rows {date,total,CAREpoint,e-Bridge}
   const bl = r => cohort === "all" ? r.total : (r[cohort] || 0);   // backlog value under the cohort filter
   const win = m3.filter(r => inDayRange(r.date));         // filtered window governs the chart
-  const cur = win.length ? win[win.length - 1] : (m3.length ? m3[m3.length - 1] : { total: 0 });
-  let prevRow = null; if (priorHasData) for (const r of m3) { if (r.date <= pTo) prevRow = r; else break; }   // state at end of prior window
+  const hasWin = win.length > 0;                          // a window with no data shows zeros — never the latest state
+  const cur = hasWin ? win[win.length - 1] : { total: 0, "CAREpoint": 0, "e-Bridge": 0 };
+  let prevRow = null; if (hasWin && priorHasData) for (const r of m3) { if (r.date <= pTo) prevRow = r; else break; }   // state at end of prior window
   const prevLbl = prevRow ? "prior period (ended " + fmtDay(prevRow.date) + ")" : null;
   const backlogDelta = prevRow ? bl(cur) - bl(prevRow) : null;
 
@@ -289,7 +290,7 @@ function render(store) {
 
   // KPIs — levels measured at the END of the selected period; deltas vs the end of the prior equal-length window
   const totalDelta = prevRow ? cur.total - prevRow.total : null;
-  const stockFoot = "open at end of period · vs prior period";
+  const stockFoot = hasWin ? "open at end of period · vs prior period" : "no data in selected range";
   const kpis = [
     { label: "Open implementations (backlog)", icon: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>', val: cur.total, pill: pill(totalDelta, true), foot: stockFoot },
     { label: "CAREpoint open", icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/>', val: cur["CAREpoint"] || 0, pill: pill(prevRow ? (cur["CAREpoint"] || 0) - (prevRow["CAREpoint"] || 0) : null, true), foot: stockFoot },
@@ -302,7 +303,7 @@ function render(store) {
         if (priorHasData) for (const p of pd) { if (p.date <= pTo) prevP = p; else break; }
         atLatest = !curP || curP.date === pd[pd.length - 1].date;
       }
-      const val = curP ? curP.v : pc.length;
+      const val = curP ? curP.v : (pd && pd.length ? 0 : pc.length);   // window ends before the first live date -> truly 0; pc fallback is legacy-store only
       const delta = (curP && prevP) ? curP.v - prevP.v : null;
       const stale = pc.filter(p => p.days > 30).length, worst = pc.length ? pc[0].days : 0;
       return { label: "Live, pending close", icon: '<circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/>', val,
@@ -358,15 +359,18 @@ function render(store) {
   const sd = sdSel(store);                              // respects the cohort filter (All / CAREpoint / e-Bridge)
   document.querySelector("#sec-stage h3").textContent = "Time in stage — where open work is piling up" + cohortLabel();
   const sdDays = sd.days || [];
-  function stageArr(s) { return sd.series[s] || []; }
-  function stageCur(s) { const a = stageArr(s); return a.length ? a[a.length - 1] : null; }
-  function stageTrend(s) {                            // compares now vs ~30 days ago; down = clearing (good)
-    const a = stageArr(s); if (!a.length) return { kind: "empty" };
-    const cur = a[a.length - 1];
-    if (cur == null) return a.some(v => v != null) ? { kind: "cleared" } : { kind: "empty" };
-    const target = Math.max(0, a.length - 1 - 30); let prev = null;
-    for (let i = target; i >= 0; i--) if (a[i] != null) { prev = a[i]; break; }
-    if (prev == null) for (let i = target + 1; i < a.length - 1; i++) if (a[i] != null) { prev = a[i]; break; }
+  // List values and badges read at the END of the selected window (not the newest data), so the list agrees with the chart.
+  let sdEnd = -1; sdDays.forEach((d, i) => { if (!viewRange.to || d <= viewRange.to) sdEnd = i; });
+  let sdStart = 0; if (viewRange.from) { sdStart = sdDays.findIndex(d => d >= viewRange.from); if (sdStart < 0) sdStart = sdDays.length; }
+  function stageArr(s) { return (sd.series && sd.series[s]) || []; }
+  function stageCur(s) { const a = stageArr(s); return sdEnd >= 0 && a[sdEnd] != null ? a[sdEnd] : null; }
+  function stageTrend(s) {                            // end of window vs ~30 days earlier (clamped to the window); down = clearing (good)
+    const a = stageArr(s); if (!a.length || sdEnd < 0 || sdStart > sdEnd) return { kind: "empty" };
+    const cur = a[sdEnd];
+    if (cur == null) return a.slice(sdStart, sdEnd + 1).some(v => v != null) ? { kind: "cleared" } : { kind: "empty" };
+    const target = Math.max(sdStart, sdEnd - 30); let prev = null;
+    for (let i = target; i >= sdStart; i--) if (a[i] != null) { prev = a[i]; break; }
+    if (prev == null) for (let i = target + 1; i < sdEnd; i++) if (a[i] != null) { prev = a[i]; break; }
     if (prev == null) return { kind: "new" };
     const d = cur - prev, pct = prev ? d / prev * 100 : 0;
     if (Math.abs(pct) < 10) return { kind: "flat", d };
