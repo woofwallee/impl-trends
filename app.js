@@ -227,16 +227,38 @@ const lastValue = { id: "lastval", afterDatasetsDraw(c) {
   ctx.restore();
 } };
 
+// TV Baseline-style dotted reference line at the base level
+const baseLine = { id: "baseline", beforeDatasetsDraw(c) {
+  const b = (c.options.plugins || {}).baseValue;
+  if (b == null || !c.scales.y) return;
+  const y = c.scales.y.getPixelForValue(b), { left, right } = c.chartArea, ctx = c.ctx;
+  if (y < c.chartArea.top || y > c.chartArea.bottom) return;
+  ctx.save(); ctx.setLineDash([3, 4]); ctx.lineWidth = 1; ctx.strokeStyle = "#9aa2af"; ctx.globalAlpha = .5;
+  ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke(); ctx.restore();
+} };
+// Baseline dataset styling (TV Baseline chart adapted to lower-is-better metrics):
+// above the base = red line + red fill toward the base, below = green. Base = first value in the window.
+function baselineDataset(vals, extra) {
+  let base = null, last = null;
+  for (const v of vals) if (v != null) { if (base == null) base = v; last = v; }
+  return { base, dataset: Object.assign({
+    data: vals, borderWidth: 1.6, tension: 0, pointRadius: 0,
+    borderColor: (last != null && base != null && last > base) ? BAD : GOOD,   // end-state color (feeds the value label)
+    segment: { borderColor: c => ((c.p0.parsed.y + c.p1.parsed.y) / 2 > base ? BAD : GOOD) },
+    fill: base == null ? false : { target: { value: base }, above: BAD + "1f", below: GOOD + "1f" },
+  }, extra || {}) };
+}
 function areaChart(id, pts, height, labelFmt) {
   labelFmt = labelFmt || fmtMonth;
   destroy(id); const el = document.getElementById(id); if (!el) return; const tc = themeColors();
+  const { base, dataset } = baselineDataset(pts.map(p => p.v), { pointHoverRadius: 4, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2 });
   charts[id] = new Chart(el, { type: "line",
-    data: { labels: pts.map(p => p.m), datasets: [{ data: pts.map(p => p.v), borderColor: tc.line, borderWidth: 1.6, fill: false, tension: 0, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: tc.line, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2 }] },
+    data: { labels: pts.map(p => p.m), datasets: [dataset] },
     options: { responsive: true, maintainAspectRatio: false, devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2), interaction: { mode: "index", intersect: false },
-      plugins: { legend: { display: false }, tooltip: { callbacks: { title: c => labelFmt(c[0].label), label: c => ` ${c.parsed.y}` } } },
+      plugins: { baseValue: base, legend: { display: false }, tooltip: { callbacks: { title: c => labelFmt(c[0].label), label: c => ` ${c.parsed.y}` } } },
       scales: { x: { grid: { display: false }, ticks: { color: tc.tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 7, callback: function (v) { return labelFmt(this.getLabelForValue(v)); } } },
-        y: { position: "right", grid: { color: tc.grid, drawBorder: false }, ticks: { color: tc.tick, maxTicksLimit: 5 }, beginAtZero: true } } },
-    plugins: [crosshair, lastValue] });
+        y: { position: "right", grace: "12%", min: 0, grid: { color: tc.grid, drawBorder: false }, ticks: { color: tc.tick, maxTicksLimit: 5 } } } },
+    plugins: [crosshair, baseLine, lastValue] });
 }
 function barChart(id, pts, fmt, bucket) {
   fmt = fmt || fmtMonth; bucket = bucket || "month";
@@ -466,20 +488,20 @@ function render(store) {
     if (weekly) wi = wi.filter((o, idx) => idx % 7 === 0 || idx === wi.length - 1);
     document.getElementById("cpSub").textContent = (weekly ? "Weekly detail (narrow the date range for daily)" : "Daily detail") + " · hover to read · scroll to zoom · drag to pan · double-click to reset";
     const wdays = wi.map(o => o.d), arr = wi.map(o => fullArr[o.i]);
-    const col = sel.t.kind === "up" ? BAD : (sel.t.kind === "down" || sel.t.kind === "cleared") ? GOOD : BLUE;
     const tc = themeColors(), el = document.getElementById("stageBig");
+    const { base, dataset } = baselineDataset(arr, { stepped: true, spanGaps: false, pointHoverRadius: 5, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2 });
     charts["stageBig"] = new Chart(el, {
       type: "line",
-      data: { labels: wdays, datasets: [{ data: arr, borderColor: col, borderWidth: 1.6, fill: false, stepped: true, tension: 0, spanGaps: false, pointRadius: 0, pointHoverRadius: 5, pointBackgroundColor: col, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2 }] },
+      data: { labels: wdays, datasets: [dataset] },
       options: { responsive: true, maintainAspectRatio: false, devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2), interaction: { mode: "index", intersect: false },
         onHover: (e, els) => { const c = charts["stageBig"]; if (!c) return; const pr = document.getElementById("cpPrice"), ro = document.getElementById("cpReadout");
           if (els && els.length) { const i = els[0].index, v = c.data.datasets[0].data[i], d = c.data.labels[i];
             pr.textContent = v == null ? "—" : v + "d"; ro.textContent = " · " + fmtDay(d) + (v == null ? " · no open work" : " · " + v + " days"); } },
-        plugins: { legend: { display: false }, tooltip: { callbacks: { title: c => fmtDay(c[0].label), label: c => c.parsed.y == null ? " no open work" : ` ${c.parsed.y} days` } },
+        plugins: { baseValue: base, legend: { display: false }, tooltip: { callbacks: { title: c => fmtDay(c[0].label), label: c => c.parsed.y == null ? " no open work" : ` ${c.parsed.y} days` } },
           zoom: { pan: { enabled: true, mode: "x" }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" } } },
         scales: { x: { grid: { display: false }, ticks: { color: tc.tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 8, callback: function (v) { return fmtDay(this.getLabelForValue(v)); } } },
-          y: { position: "right", grid: { color: tc.grid, drawBorder: false }, ticks: { color: tc.tick, maxTicksLimit: 5 }, beginAtZero: true } } },
-      plugins: [crosshair, lastValue],
+          y: { position: "right", grace: "12%", min: 0, grid: { color: tc.grid, drawBorder: false }, ticks: { color: tc.tick, maxTicksLimit: 5 } } } },
+      plugins: [crosshair, baseLine, lastValue],
     });
     el.onmouseleave = () => { document.getElementById("cpPrice").textContent = sel.cur != null ? sel.cur + "d" : "—"; document.getElementById("cpReadout").textContent = ""; };
     el.ondblclick = () => { if (charts["stageBig"]) charts["stageBig"].resetZoom(); };
