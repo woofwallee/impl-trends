@@ -202,10 +202,10 @@ function fmtMonth(k) { if (!k) return "—"; const [y, m] = k.split("-").map(Num
 function statusFor(delta, level, lowerBetter) {           // KPI cards: direction words, not judgments
   if (delta == null) return { word: "No comparison", cls: "flat", why: "no prior period in the data" };
   const dead = Math.max(1, Math.round(0.02 * Math.max(level || 0, 1)));
-  if (Math.abs(delta) <= dead) return { word: "Steady", cls: "flat", why: `within ${dead} of the prior period (2% deadband)` };
+  if (Math.abs(delta) <= dead) return { word: "Steady", glyph: "", cls: "flat", why: `within ${dead} of the prior period (2% deadband, at least 1)` };
   const up = delta > 0, good = lowerBetter ? !up : up;
-  return { word: up ? "Rising" : "Falling", cls: good ? "good" : "bad",
-    why: `${up ? "+" : ""}${delta} vs the prior period` };
+  return { word: up ? "Rising" : "Falling", glyph: up ? "\u25b2 " : "\u25bc ", cls: good ? "good" : "bad",
+    why: `${up ? "+" : ""}${delta} vs the prior period · ${good ? "green = improving" : "red = worsening"}` };
 }
 function pill(d, lowerBetter) { if (d == null) return `<span class="pill flat">no prior period in data</span>`; if (d === 0) return `<span class="pill flat">0</span>`;
   const down = d < 0, ok = lowerBetter ? down : !down; return `<span class="pill ${ok ? "good" : "bad"}">${down ? "&#9660;" : "&#9650;"} ${Math.abs(d)}</span>`; }
@@ -535,7 +535,7 @@ function computeStageRows(store) {                        // one source of truth
     if (pct == null && d === 0) return { kind: "flat", d, pct };
     return { kind: d > 0 ? "up" : "down", d, pct };
   };
-  const rows = CONFIG.pipelineStages.map(st => ({ st, cur: cur(st), open: sd.open[st] ?? 0, t: trend(st) }))
+  const rows = CONFIG.pipelineStages.filter(st => st !== LIVE_STAGE).map(st => ({ st, cur: cur(st), open: sd.open[st] ?? 0, t: trend(st) }))
     .sort((a, b) => (b.cur ?? -1) - (a.cur ?? -1) || b.open - a.open);
   return { sd, sdDays, sdStart, sdEnd, rows };
 }
@@ -595,10 +595,14 @@ function renderPendPanel(store) {
   el.classList.toggle("hidden", !pendOpen);
   if (!pendOpen) return;
   const pc = (store.pendingClose || []).filter(p => cohort === "all" || (p.types || []).includes(cohort));
-  el.innerHTML = `<div class="row-h" style="margin-bottom:4px"><div><h3 style="font-size:13px">WENT LIVE, NOT CLOSED OUT</h3><p class="ch-sub">waiting for the stage move in HubSpot · longest wait first</p></div><button class="btn" id="pendClose">Close</button></div>`
+  el.innerHTML = `<div class="row-h" style="margin-bottom:4px"><div><h3 style="font-size:13px">WENT LIVE, NOT CLOSED OUT</h3><p class="ch-sub">waiting for the stage move in HubSpot · longest wait first · as of the latest import</p></div><span><button class="btn" id="pendCopy">Copy list</button> <button class="btn" id="pendClose">Close</button></span></div>`
     + (pc.length ? pc.map(p => `<div class="pend-row"><span class="pn" title="${p.name}">${p.name}</span><span class="pm">${p.stage}</span><span class="pm">went live ${fmtDay(p.live)}</span><span class="pm">${p.days}d waiting</span></div>`).join("")
                  : `<div style="color:var(--hint);padding:14px 0">No one is waiting on close-out.</div>`);
   const x = document.getElementById("pendClose"); if (x) x.addEventListener("click", () => { pendOpen = false; renderPendPanel(loadStore()); });
+  const cp = document.getElementById("pendCopy"); if (cp) cp.addEventListener("click", () => {
+    const lines = pc.map(p => `${p.name} — ${p.stage} — went live ${fmtDay(p.live)} — ${p.days}d waiting`).join("\n");
+    navigator.clipboard.writeText(lines).then(() => toast("List copied.")).catch(() => toast("Copy failed.", true));
+  });
 }
 function renderInsights(findings) {
   const box = document.getElementById("stageInsights"); if (!box) return;
@@ -688,35 +692,53 @@ function render(store) {
   const totalDelta = prevRow ? cur.total - prevRow.total : null;
   const cpDelta = prevRow ? (cur["CAREpoint"] || 0) - (prevRow["CAREpoint"] || 0) : null;
   const ebDelta = prevRow ? (cur["e-Bridge"] || 0) - (prevRow["e-Bridge"] || 0) : null;
+  const cumNote = (m3rows) => {                            // slow-drift guard: Steady months still disclose a 3-period move >= 5%
+    return (delta, level, curV) => {
+      if (delta == null || !hasWin || !m3rows.length) return "";
+      const dead = Math.max(1, Math.round(0.02 * Math.max(level || 0, 1)));
+      if (Math.abs(delta) > dead) return "";
+      const t0 = new Date(viewRange.from + "T00:00:00Z").getTime(), t1 = new Date(viewRange.to + "T00:00:00Z").getTime();
+      const backTo = dstr(new Date(t0 - 2 * (t1 - t0 + MS_PER_DAY)));
+      let base = null; for (const r of m3rows) { if (r.date <= backTo) base = r; else break; }
+      if (!base) return "";
+      const bv = bl(base); if (!bv) return "";
+      const cum = Math.round((curV - bv) / bv * 100);
+      return Math.abs(cum) >= 5 ? ` · ${cum > 0 ? "+" : ""}${cum}% over 3 periods` : "";
+    };
+  };
+  const drift = cumNote(m3);
   const kpis = [
     (() => { const st = statusFor(totalDelta, cur.total, true); return {
-      label: "Open implementations", icon: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>', st,
-      foot: hasWin ? `${cur.total.toLocaleString()} open · ${totalDelta == null ? "no prior period" : (totalDelta >= 0 ? "+" + totalDelta : totalDelta) + " vs " + priorName}` : "no data in selected range" }; })(),
+      label: "Open implementations", cap: "Open trend", count: cur.total, icon: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>', st,
+      foot: hasWin ? `<b>${cur.total.toLocaleString()} open</b> · ${totalDelta == null ? "no prior period to compare" : (totalDelta >= 0 ? "+" + totalDelta : totalDelta) + " vs " + priorName + drift(totalDelta, cur.total, cur.total)}` : "no data in selected range" }; })(),
     (() => { const st = statusFor(cpDelta, cur["CAREpoint"] || 0, true); return {
-      label: "CAREpoint", icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/>', st,
-      foot: hasWin ? `${(cur["CAREpoint"] || 0).toLocaleString()} open · ${cpDelta == null ? "no prior period" : (cpDelta >= 0 ? "+" + cpDelta : cpDelta) + " vs " + priorName}` : "no data in selected range" }; })(),
+      label: "CAREpoint", cap: "Open trend", count: cur["CAREpoint"] || 0, icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/>', st,
+      foot: hasWin ? `<b>${(cur["CAREpoint"] || 0).toLocaleString()} open</b> · ${cpDelta == null ? "no prior period to compare" : (cpDelta >= 0 ? "+" + cpDelta : cpDelta) + " vs " + priorName}` : "no data in selected range" }; })(),
     (() => { const st = statusFor(ebDelta, cur["e-Bridge"] || 0, true); return {
-      label: "e-Bridge", icon: '<path d="M4 7h16M4 12h16M4 17h10"/>', st,
-      foot: hasWin ? `${(cur["e-Bridge"] || 0).toLocaleString()} open · ${ebDelta == null ? "no prior period" : (ebDelta >= 0 ? "+" + ebDelta : ebDelta) + " vs " + priorName}` : "no data in selected range" }; })(),
+      label: "e-Bridge", cap: "Open trend", count: cur["e-Bridge"] || 0, icon: '<path d="M4 7h16M4 12h16M4 17h10"/>', st,
+      foot: hasWin ? `<b>${(cur["e-Bridge"] || 0).toLocaleString()} open</b> · ${ebDelta == null ? "no prior period to compare" : (ebDelta >= 0 ? "+" + ebDelta : ebDelta) + " vs " + priorName}` : "no data in selected range" }; })(),
     (() => { const st = statusFor(goliveDelta, glWinTotal, false); return {
-      label: "Go-Lives", icon: '<path d="M5 13l4 4L19 7"/>', st,
-      foot: hasWin ? `${glWinTotal.toLocaleString()} went live · ${goliveDelta == null ? "no prior period" : (goliveDelta >= 0 ? "+" + goliveDelta : goliveDelta) + " vs " + priorName}` : "no data in selected range" }; })(),
+      label: "Go-Lives", cap: "Go-live trend", count: glWinTotal, icon: '<path d="M5 13l4 4L19 7"/>', st,
+      foot: hasWin ? `<b>${glWinTotal.toLocaleString()} went live</b> · ${goliveDelta == null ? "no prior period to compare" : (goliveDelta >= 0 ? "+" + goliveDelta : goliveDelta) + " vs " + priorName}` : "no data in selected range" }; })(),
   ];
-  document.getElementById("kpis").innerHTML = kpis.map((k, i) => `<div class="card kpi" data-share="kpi-${i}">
+  document.getElementById("kpis").innerHTML = kpis.map((k, i) => k.st.word === "No comparison"
+    ? `<div class="card kpi" data-share="kpi-${i}">
     <div class="kl">${k.label}<span class="ki"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px">${k.icon}</svg></span></div>
-    <div class="kv-cap">Trend</div><div class="kv kv-status ${k.st.cls}" title="${k.st.why}">${k.st.word}</div><div class="kfoot">${k.foot}</div></div>`).join("")
-    + `<div class="kpi-note">Trend compares the selected period with the one before it · within 2% counts as Steady · products overlap, an implementation can be both</div>`;
+    <div class="kv-cap">${k.cap}</div><div class="kv">${k.count.toLocaleString()}</div><div class="kfoot">${k.foot}</div></div>`
+    : `<div class="card kpi" data-share="kpi-${i}">
+    <div class="kl">${k.label}<span class="ki"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px">${k.icon}</svg></span></div>
+    <div class="kv-cap">${k.cap}</div><div class="kv kv-status ${k.st.cls}" title="${k.st.why}">${k.st.glyph}${k.st.word}</div><div class="kfoot">${k.foot}</div></div>`).join("")
+    + `<div class="kpi-note">Trend compares the selected period with the one before it · within 2% (at least ±1) counts as Steady · red = worsening, green = improving · products overlap, an implementation can be both</div>`;
 
   // backlog — daily line within window, under the cohort filter
   document.getElementById("backlogNow").textContent = bl(cur).toLocaleString() + (cohort === "all" ? "" : "");
   document.querySelector("#sec-backlog h3").textContent = "OPEN PIPELINE TREND" + cohortLabel();
   document.getElementById("backlogPill").innerHTML = backlogDelta != null ? pill(backlogDelta, true) + ` <span style="font-size:12px;color:var(--hint)">vs ${priorName} (ended ${fmtDay(prevRow.date)})</span>` : "";
-  const wt = windowTrend(win.map(bl));
-  const wtRange = `(${fmtDay(viewRange.from)} to ${fmtDay(viewRange.to)})`;   // explicit scope: the pill covers the SELECTED range, not the zoomed view
-  document.getElementById("backlogTrend").innerHTML = !wt ? "" :
-    wt.kind === "up" ? `<span class="pill bad" style="font-size:13px;padding:3px 10px">&#9650; Rising ${wtRange}</span>` :
-    wt.kind === "down" ? `<span class="pill good" style="font-size:13px;padding:3px 10px">&#9660; Falling ${wtRange}</span>` :
-    `<span class="pill flat" style="font-size:13px;padding:3px 10px">&#9644; Flat ${wtRange}</span>`;
+  const heroSt = statusFor(totalDelta, cur.total, true);   // ONE verdict owner: the card and this pill can never disagree
+  const wtRange = `(${fmtDay(viewRange.from)} to ${fmtDay(viewRange.to)})`;
+  document.getElementById("backlogTrend").innerHTML = !hasWin ? "" : heroSt.word === "No comparison"
+    ? `<span class="pill flat" style="font-size:13px;padding:3px 10px">${wtRange}</span>`
+    : `<span class="pill ${heroSt.cls}" style="font-size:13px;padding:3px 10px">${heroSt.glyph}${heroSt.word} ${wtRange}</span>`;
   areaChart("backlogChart", m3.map(r => ({ m: r.date, v: bl(r) })), 220, fmtDay, viewRange);   // full history; selected range = initial viewport
 
   // go-lives — bars bucketed to the window + prior-period comparison
@@ -724,8 +746,10 @@ function render(store) {
   let estLine = "";
   if (Array.isArray(store.estUpcoming) && bounds) {
     const hEnd = dstr(new Date(new Date(bounds[1] + "T00:00:00Z").getTime() + 30 * MS_PER_DAY));
-    const nEst = store.estUpcoming.filter(e => e.d > bounds[1] && e.d <= hEnd && (cohort === "all" || (e.types || []).includes(cohort))).length;
-    if (nEst) estLine = ` · ${nEst} estimated to go live in the next 30 days`;
+    const estC = store.estUpcoming.filter(e => cohort === "all" || (e.types || []).includes(cohort));
+    const nEst = estC.filter(e => e.d > bounds[1] && e.d <= hEnd).length;
+    const past = estC.filter(e => e.d <= bounds[1]).length;
+    if (estC.length) estLine = ` · ${nEst} of ${estC.length} with estimate dates due by ${fmtDay(hEnd)}${past ? ` · ${past} past due` : ""}`;
   }
   document.getElementById("goliveSub").textContent = `How many implementations went live · each bar is one ${glBucket}` + estLine;
   document.getElementById("goliveNow").textContent = glWinTotal.toLocaleString();
@@ -736,7 +760,9 @@ function render(store) {
   document.getElementById("goliveCap").innerHTML = (glWinTotal
     ? `${glWinTotal} implementation${glWinTotal === 1 ? "" : "s"} went live in the selected period` + (goliveDelta != null ? ` · ${goliveDelta >= 0 ? goliveDelta + " more" : Math.abs(goliveDelta) + " fewer"} than the ${winLen} days before.` : ".")
     : "No go-lives in the selected period.")
-    + (pcN ? ` <button type="button" class="linky" data-pend="1">${pcN} went live but not closed out · view list</button>` : "");
+    + (pcN ? (() => { const pcF = pcAll.filter(p => cohort === "all" || (p.types || []).includes(cohort));
+        const oldest = pcF.length ? pcF[0].days : 0, stale = pcF.filter(p => p.days > 30).length;
+        return ` <button type="button" class="linky" data-pend="1">${pcN} went live but not closed out (all time)${stale ? ` · ${stale} waiting 30+ days` : ""} · oldest ${oldest}d · view list</button>`; })() : "");
   document.getElementById("breakdown").style.display = cohort === "all" ? "" : "none";
   const bdTot = cur.total || 1;
   document.getElementById("breakdown").innerHTML = [
@@ -749,7 +775,7 @@ function render(store) {
       const d0 = win[0].date, sumAfter = m => { let n = 0; for (const [d, c] of Object.entries(m)) if (d > d0 && inDayRange(d)) n += c; return n; };
       const started = sumAfter(stMap), closed = sumAfter(clMap);
       const net = bl(cur) - bl(win[0]);
-      flowEl.textContent = `${started} started · ${closed} closed out · net ${net >= 0 ? "+" + net : net} since ${fmtDay(d0)}`;
+      flowEl.textContent = `${started} started · ${closed} moved to Live/Complete · net ${net >= 0 ? "+" + net : net} since ${fmtDay(d0)}`;
     } else flowEl.textContent = "";
   }
 
@@ -772,8 +798,14 @@ function render(store) {
       });
       const spC = charts["speedChart"]; if (spC) { spC.options.plugins.lastValOff = true; spC.options.plugins.avgLineValue = speedTo; spC.update("none"); }
     } else areaChart("speedChart", Object.keys(m2c).sort().map(k => ({ m: k, v: m2c[k] })), 110, fmtMonth, viewRange);   // legacy store: monthly line
+    let spRecent = "";
+    if (charts["speedChart"]) { const c = charts["speedChart"], dsv = c.data.datasets[0].data;
+      let lastV = null; for (let i = Math.floor(c.scales.x.max); i >= Math.ceil(c.scales.x.min); i--) if (dsv[i] != null) { lastV = dsv[i]; break; }
+      if (lastV != null && speedTo && lastV >= speedTo * 1.2) spRecent = ` · recent go-lives trending ~${lastV}d`; }
+    const spMiss = Math.max(0, glWinTotal - spN);
     document.getElementById("speedCap").textContent = `Go-lives in the selected period averaged ${speedTo} days from Purchase Order to Go-Live` + (spN ? ` across ${spN} go-lives` : "") +
-      (speedDelta != null ? (speedDelta < 0 ? ` · ${Math.abs(speedDelta)} days faster than the ${priorName}.` : speedDelta > 0 ? ` · ${speedDelta} days slower than the ${priorName}.` : ` · unchanged from the ${priorName}.`) : ".");
+      (speedDelta != null ? (speedDelta < 0 ? ` · ${Math.abs(speedDelta)} days faster than the ${priorName}` : speedDelta > 0 ? ` · ${speedDelta} days slower than the ${priorName}` : ` · unchanged from the ${priorName}`) : "") +
+      spRecent + (spMiss ? ` · ${spMiss} go-live${spMiss === 1 ? "" : "s"} missing a PO date aren't plotted` : "") + ".";
   } else {
     destroy("speedChart");
     document.getElementById("speedNow").textContent = "—";
@@ -787,8 +819,8 @@ function render(store) {
   function stageArr(s) { return (sd.series && sd.series[s]) || []; }
   function trendBadge(t) {
     const pctTxt = t.pct == null ? null : Math.round(Math.abs(t.pct)) + "%";
-    if (t.kind === "up") return `<span class="pill bad worse" title="up ${t.d}d vs ~30 days earlier">&#9650; ${pctTxt != null ? pctTxt : t.d + "d"}</span>`;
-    if (t.kind === "down") return `<span class="pill good" title="down ${Math.abs(t.d)}d vs ~30 days earlier">&#9660; ${pctTxt != null ? pctTxt : Math.abs(t.d) + "d"}</span>`;
+    if (t.kind === "up") return `<span class="pill bad worse" title="Aging · up ${t.d}d vs ~30 days earlier">&#9650; ${pctTxt != null ? pctTxt : t.d + "d"}</span>`;
+    if (t.kind === "down") return `<span class="pill good" title="Clearing · down ${Math.abs(t.d)}d vs ~30 days earlier">&#9660; ${pctTxt != null ? pctTxt : Math.abs(t.d) + "d"}</span>`;
     if (t.kind === "cleared") return `<span class="pill good">&#9660; cleared</span>`;
     if (t.kind === "flat") return `<span class="pill flat">&#9644; flat</span>`;
     if (t.kind === "new") return `<span class="pill flat">new</span>`;
@@ -835,7 +867,7 @@ function render(store) {
   const down = rows.filter(s => s.t.kind === "down" || s.t.kind === "cleared").length;
   const flat = rows.filter(s => s.t.kind === "flat").length;
   document.getElementById("stageSummary").innerHTML = sdDays.length
-    ? `<span><b style="color:var(--bad)">${up}</b> rising</span><span><b style="color:var(--good)">${down}</b> falling</span><span><b>${flat}</b> flat</span>`
+    ? `<span><b style="color:var(--bad)">${up}</b> aging</span><span><b style="color:var(--good)">${down}</b> clearing</span><span><b>${flat}</b> steady</span>`
     : `<span>This needs the stage date columns · included when you export with "All properties"</span>`;
 
   const dataThrough = bounds ? bounds[1] : null;
@@ -888,10 +920,10 @@ function applyTheme(t) { document.documentElement.setAttribute("data-theme", t);
 
 /* ---------- share ---------- */
 const SHARE_CARDS = [
-  { id: "kpi-0", label: "Open implementations (backlog) · number" },
-  { id: "kpi-1", label: "CAREpoint · status" },
-  { id: "kpi-2", label: "e-Bridge open · number" },
-  { id: "kpi-3", label: "Go-Lives · status" },
+  { id: "kpi-0", label: "Open implementations · trend" },
+  { id: "kpi-1", label: "CAREpoint · trend" },
+  { id: "kpi-2", label: "e-Bridge · trend" },
+  { id: "kpi-3", label: "Go-Lives · trend" },
   { id: "sec-backlog", label: "Open pipeline trend (backlog)" },
   { id: "sec-stage", label: "Time in stage" },
   { id: "sec-speed", label: "PO to go-live" },
@@ -998,35 +1030,43 @@ function renderStageBd() {
   const totOpen = rows.reduce((s, r) => s + (r.open || 0), 0) || 1;
   const enr = rows.map(r => {
     const share = (r.open || 0) / totOpen * 100;
-    const load = r.open === 0 ? { w: "\u2014", cls: "flat" } : share >= 15 ? { w: "Heavy", cls: "warn" } : share >= 5 ? { w: "Moderate", cls: "flat" } : { w: "Light", cls: "flat" };
-    const tr = r.t.kind === "up" ? { w: "Slowing", cls: "bad" } : r.t.kind === "down" ? { w: "Clearing", cls: "good" }
-      : r.t.kind === "cleared" ? { w: "Cleared", cls: "good" } : r.t.kind === "flat" ? { w: "Steady", cls: "flat" }
-      : r.t.kind === "new" ? { w: "New", cls: "flat" } : { w: "\u2014", cls: "flat" };
+    const load = r.open === 0 ? { w: "\u2014", cls: "flat" } : share >= 10 ? { w: "Heavy", cls: "warn" } : share >= 5 ? { w: "Moderate", cls: "flat" } : { w: "Light", cls: "flat" };
+    const tr = r.t.kind === "up" ? { w: "Aging", cls: "bad", rank: 0 } : r.t.kind === "new" ? { w: "No history", cls: "flat", rank: 1 }
+      : r.t.kind === "flat" ? { w: "Steady", cls: "flat", rank: 2 } : r.t.kind === "down" ? { w: "Clearing", cls: "good", rank: 3 }
+      : r.t.kind === "cleared" ? { w: "Emptied", cls: "good", rank: 4 } : { w: "\u2014", cls: "flat", rank: 5 };
     return { ...r, share, load, tr, pct: r.t.pct == null ? null : Math.round(r.t.pct) };
   });
-  const key = { stage: r => r.st, trend: r => r.tr.w, load: r => r.share, pct: r => r.pct ?? -999, open: r => r.open, share: r => r.share, cur: r => r.cur ?? -1 }[sbSort.col];
+  const key = { stage: r => r.st, trend: r => -r.tr.rank, load: r => r.share, pct: r => r.pct ?? (r.t.d > 0 ? 10000 + r.t.d : r.t.d != null ? -10000 : -99999), open: r => r.open, share: r => r.share, cur: r => r.cur ?? -1 }[sbSort.col];
   enr.sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * sbSort.dir; });
-  document.getElementById("sbSub").textContent = `Every stage's health at a glance${cohortLabel()} · ${fmtDay(viewRange.from)} to ${fmtDay(viewRange.to)} · click a column to sort`;
+  document.getElementById("sbSub").textContent = `Every stage's health at a glance${cohortLabel()} · ${fmtDay(viewRange.from)} to ${fmtDay(viewRange.to)} · click a column to sort · click a stage to chart it`;
   const hdr = [["stage", "Stage"], ["trend", "Trend"], ["load", "Load"], ["pct", "vs ~30d"], ["open", "Open"], ["share", "% of backlog"], ["cur", "Avg days"]];
   const arrow = c => sbSort.col === c ? (sbSort.dir < 0 ? " \u25be" : " \u25b4") : "";
+  const vsCell = r => {
+    if (r.t.kind !== "up" && r.t.kind !== "down") return `<span class="sb-r">\u2014</span>`;
+    const up = r.t.kind === "up";
+    const txt = r.pct == null ? `${up ? "+" : ""}${r.t.d}d from 0` : `${Math.abs(r.pct)}%`;
+    return `<span class="sb-r"><span class="pill ${up ? "bad worse" : "good"}" title="${up ? "Aging · up " + r.t.d : "Clearing · down " + Math.abs(r.t.d)}d vs ~30 days earlier">${up ? "\u25b2" : "\u25bc"} ${txt}</span></span>`;
+  };
   document.getElementById("sbTable").innerHTML =
-    `<div class="sb-grid">` + hdr.map(([c, l], i) => `<div class="sb-h${i > 2 ? " sb-r" : ""}" data-sb="${c}" title="click to sort">${l}${arrow(c)}</div>`).join("") + `</div>`
+    `<div class="sb-grid">` + hdr.map(([c, l], i) => `<div class="sb-h${i > 2 ? " sb-r" : ""}${sbSort.col === c ? " on" : ""}" data-sb="${c}" role="button" tabindex="0" aria-sort="${sbSort.col === c ? (sbSort.dir < 0 ? "descending" : "ascending") : "none"}" title="click to sort">${l}${arrow(c)}</div>`).join("") + `</div>`
     + enr.map(r => `<div class="sb-grid sb-row" data-stage="${r.st}" role="button" tabindex="0">
       <span class="sb-name" title="${r.st}">${r.st}</span>
-      <span class="pill ${r.tr.cls === "warn" ? "flat" : r.tr.cls}">${r.tr.w}</span>
+      <span class="pill ${r.tr.cls === "warn" ? "flat" : r.tr.cls}${r.tr.cls === "bad" ? " worse" : ""}">${r.tr.w}</span>
       <span class="pill ${r.load.cls === "warn" ? "bad" : "flat"}" ${r.load.w === "Heavy" ? 'style="background:rgba(240,162,78,.18);color:#b7791f"' : ""}>${r.load.w}</span>
-      <span class="sb-r">${r.pct == null ? (r.t.d != null ? (r.t.d >= 0 ? "+" + r.t.d + "d" : r.t.d + "d") : "\u2014") : (r.pct >= 0 ? "\u25b2 " + r.pct + "%" : "\u25bc " + Math.abs(r.pct) + "%")}</span>
+      ${vsCell(r)}
       <span class="sb-r">${r.open || 0}</span>
       <span class="sb-r">${r.open ? Math.round(r.share) + "%" : "\u2014"}</span>
       <span class="sb-r">${r.cur != null ? r.cur + "d" : "\u2014"}</span>
     </div>`).join("");
-  document.querySelectorAll("[data-sb]").forEach(h => h.addEventListener("click", () => {
-    const c = h.dataset.sb;
-    sbSort = sbSort.col === c ? { col: c, dir: -sbSort.dir } : { col: c, dir: c === "stage" ? 1 : -1 };
-    renderStageBd();
-  }));
+  document.querySelectorAll("[data-sb]").forEach(h => {
+    const go = () => { const c = h.dataset.sb;
+      sbSort = sbSort.col === c ? { col: c, dir: -sbSort.dir } : { col: c, dir: c === "stage" ? 1 : -1 };
+      renderStageBd(); };
+    h.addEventListener("click", go);
+    h.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });
+  });
   document.querySelectorAll("#sbTable .sb-row").forEach(el => {
-    const pick = () => { selectedStage = el.dataset.stage; showView("dash"); setTimeout(() => document.getElementById("sec-stage").scrollIntoView({ behavior: "smooth" }), 100); };
+    const pick = () => { selectedStage = el.dataset.stage; showView("dash"); setTimeout(() => { const sec = document.getElementById("sec-stage"); sec.setAttribute("tabindex", "-1"); sec.focus({ preventScroll: true }); sec.scrollIntoView({ behavior: "smooth" }); }, 100); };
     el.addEventListener("click", pick);
     el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
   });
@@ -1085,7 +1125,9 @@ function handleFile(file) { const r = new FileReader(); r.onload = e => {
     }
     const nameM = (file.name || "").match(CONFIG.filenameDateRegex);
     const snap = nameM ? `${nameM[1]}-${nameM[2]}` : monthKey(new Date());
-    const store = applyImport(loadStore(), records, snap); saveStore(store);
+    const store = applyImport(loadStore(), records, snap);
+    if (/^sample-data\.csv$/i.test((file.name || "").trim())) store.demo = true;   // the bundled sample stays labeled sample
+    saveStore(store);
     logImport({ fileName: file.name, importedAt: new Date().toISOString(), snapMonth: snap, records: records.length, older: !!store.lastImport.older, csv: e.target.result });
     try { localStorage.setItem(TF_KEY, "lastm"); } catch (e2) { }
     showView("dash");
@@ -1205,6 +1247,13 @@ function init() {
   });
   document.getElementById("histBack").addEventListener("click", () => showView("dash"));
   const sbB = document.getElementById("sbBack"); if (sbB) sbB.addEventListener("click", () => showView("dash"));
+  const sbP = document.getElementById("sbPng"); if (sbP) sbP.addEventListener("click", () => {
+    const card = document.querySelector("#stagebd .card"); if (!card) return;
+    const dark = document.documentElement.getAttribute("data-theme") === "dark";
+    html2canvas(card, { backgroundColor: dark ? "#0e1320" : "#eef1f5", scale: 2, useCORS: true }).then(cv => {
+      const a = document.createElement("a"); a.href = stampCanvas(cv, dark ? "#0e1320" : "#eef1f5").toDataURL("image/png"); a.download = "stage-breakdown.png"; a.click();
+    }).catch(() => toast("PNG export failed.", true));
+  });
   document.getElementById("howtoBack").addEventListener("click", () => showView("dash"));
 
   // Collapsible stage selector (TradingView watchlist behavior) — chart reflows to full card width.
