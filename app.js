@@ -199,6 +199,14 @@ function applyImport(store, records, snap) {
 
 /* ---------- helpers ---------- */
 function fmtMonth(k) { if (!k) return "—"; const [y, m] = k.split("-").map(Number); return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }); }
+function statusFor(delta, level, lowerBetter) {           // KPI cards: direction words, not judgments
+  if (delta == null) return { word: "No comparison", cls: "flat", why: "no prior period in the data" };
+  const dead = Math.max(1, Math.round(0.02 * Math.max(level || 0, 1)));
+  if (Math.abs(delta) <= dead) return { word: "Stable", cls: "flat", why: `within ${dead} of the prior period (2% deadband)` };
+  const up = delta > 0, good = lowerBetter ? !up : up;
+  return { word: up ? "Increasing" : "Decreasing", cls: good ? "good" : "bad",
+    why: `${up ? "+" : ""}${delta} vs the prior period` };
+}
 function pill(d, lowerBetter) { if (d == null) return `<span class="pill flat">no prior period in data</span>`; if (d === 0) return `<span class="pill flat">0</span>`;
   const down = d < 0, ok = lowerBetter ? down : !down; return `<span class="pill ${ok ? "good" : "bad"}">${down ? "&#9660;" : "&#9650;"} ${Math.abs(d)}</span>`; }
 function m4Map(store) { const m = store.m4 || {}; return m.all ? m : { all: m }; }                 // legacy stores wrap as all
@@ -503,6 +511,34 @@ function windowTrend(vals) {                             // direction of the vis
 
 /* Stage Insights Panel (spec: docs/specs/2026-07-03-stage-insights-panel-design.md).
    Pure + deterministic: ranked candidates per detector, greedy assembly with per-stage dedup. */
+function stageWindow(store) {                             // window indices for the stage series under viewRange + cohort
+  const sd = sdSel(store);
+  const sdDays = sd.days || [];
+  let sdEnd = -1; sdDays.forEach((d, i) => { if (!viewRange.to || d <= viewRange.to) sdEnd = i; });
+  let sdStart = 0; if (viewRange.from) { sdStart = sdDays.findIndex(d => d >= viewRange.from); if (sdStart < 0) sdStart = sdDays.length; }
+  return { sd, sdDays, sdStart, sdEnd };
+}
+function computeStageRows(store) {                        // one source of truth: dashboard watchlist AND breakdown page
+  const { sd, sdDays, sdStart, sdEnd } = stageWindow(store);
+  const arr = s => (sd.series && sd.series[s]) || [];
+  const cur = s => { const a = arr(s); return sdEnd >= 0 && a[sdEnd] != null ? a[sdEnd] : null; };
+  const trend = s => {                                    // end of window vs ~30 days earlier (clamped); down = clearing (good)
+    const a = arr(s); if (!a.length || sdEnd < 0 || sdStart > sdEnd) return { kind: "empty" };
+    const c = a[sdEnd];
+    if (c == null) return a.slice(sdStart, sdEnd + 1).some(v => v != null) ? { kind: "cleared" } : { kind: "empty" };
+    const target = Math.max(sdStart, sdEnd - 30); let prev = null;
+    for (let i = target; i >= sdStart; i--) if (a[i] != null) { prev = a[i]; break; }
+    if (prev == null) for (let i = target + 1; i < sdEnd; i++) if (a[i] != null) { prev = a[i]; break; }
+    if (prev == null) return { kind: "new" };
+    const d = c - prev, pct = prev ? d / prev * 100 : null;
+    if (Math.abs(pct == null ? 0 : pct) < 10 && pct != null) return { kind: "flat", d, pct };
+    if (pct == null && d === 0) return { kind: "flat", d, pct };
+    return { kind: d > 0 ? "up" : "down", d, pct };
+  };
+  const rows = CONFIG.pipelineStages.map(st => ({ st, cur: cur(st), open: sd.open[st] ?? 0, t: trend(st) }))
+    .sort((a, b) => (b.cur ?? -1) - (a.cur ?? -1) || b.open - a.open);
+  return { sd, sdDays, sdStart, sdEnd, rows };
+}
 function stageInsights(sd, sdStart, sdEnd, trends) {
   const stages = CONFIG.pipelineStages.filter(s => s !== LIVE_STAGE && (sd.series || {})[s]);
   const arr = s => sd.series[s] || [];
@@ -647,33 +683,28 @@ function render(store) {
   }
   const speedDelta = (priorHasData && speedTo != null && speedPrevV != null) ? speedTo - speedPrevV : null;
 
-  // KPIs — levels measured at the END of the selected period; deltas vs the end of the prior equal-length window
+  // KPIs — STATUS words (direction vs prior period, 2% deadband); numbers demoted to the footer
   const totalDelta = prevRow ? cur.total - prevRow.total : null;
-  const stockFoot = hasWin ? `open at end of period · vs ${priorName}` : "no data in selected range";
+  const cpDelta = prevRow ? (cur["CAREpoint"] || 0) - (prevRow["CAREpoint"] || 0) : null;
+  const ebDelta = prevRow ? (cur["e-Bridge"] || 0) - (prevRow["e-Bridge"] || 0) : null;
   const kpis = [
-    { label: "Open implementations (backlog)", icon: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>', val: cur.total, pill: pill(totalDelta, true), foot: stockFoot },
-    { label: "CAREpoint open", icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/>', val: cur["CAREpoint"] || 0, pill: pill(prevRow ? (cur["CAREpoint"] || 0) - (prevRow["CAREpoint"] || 0) : null, true), foot: stockFoot },
-    { label: "e-Bridge open", icon: '<path d="M4 7h16M4 12h16M4 17h10"/>', val: cur["e-Bridge"] || 0, pill: pill(prevRow ? (cur["e-Bridge"] || 0) - (prevRow["e-Bridge"] || 0) : null, true), foot: stockFoot },
-    (() => {                                             // pending-close level at the window end (falls back to as-of-import for legacy stores)
-      const pd = store.pendingDaily || null, pc = store.pendingClose || [];
-      let curP = null, prevP = null, atLatest = true;
-      if (pd && pd.length) {
-        for (const p of pd) { if (p.date <= viewRange.to) curP = p; else break; }
-        if (priorHasData) for (const p of pd) { if (p.date <= pTo) prevP = p; else break; }
-        atLatest = !curP || curP.date === pd[pd.length - 1].date;
-      }
-      const val = curP ? curP.v : (pd && pd.length ? 0 : pc.length);   // window ends before the first live date -> truly 0; pc fallback is legacy-store only
-      const delta = (curP && prevP) ? curP.v - prevP.v : null;
-      const stale = pc.filter(p => p.days > 30).length, worst = pc.length ? pc[0].days : 0;
-      return { label: "Went live, not closed out", icon: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>', val,
-        pill: pill(delta, true),
-        foot: atLatest ? (val ? (stale ? `${stale} waiting 30+ days · longest ${worst}d since go-live` : "none waiting long") : "no one waiting on close-out")
-                       : `at end of period · vs ${priorName}` }; })(),
+    (() => { const st = statusFor(totalDelta, cur.total, true); return {
+      label: "Open implementations", icon: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>', st,
+      foot: hasWin ? `${cur.total.toLocaleString()} open · ${totalDelta == null ? "no prior period" : (totalDelta >= 0 ? "+" + totalDelta : totalDelta) + " vs " + priorName}` : "no data in selected range" }; })(),
+    (() => { const st = statusFor(cpDelta, cur["CAREpoint"] || 0, true); return {
+      label: "CAREpoint", icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/>', st,
+      foot: hasWin ? `${(cur["CAREpoint"] || 0).toLocaleString()} open · ${cpDelta == null ? "no prior period" : (cpDelta >= 0 ? "+" + cpDelta : cpDelta) + " vs " + priorName}` : "no data in selected range" }; })(),
+    (() => { const st = statusFor(ebDelta, cur["e-Bridge"] || 0, true); return {
+      label: "e-Bridge", icon: '<path d="M4 7h16M4 12h16M4 17h10"/>', st,
+      foot: hasWin ? `${(cur["e-Bridge"] || 0).toLocaleString()} open · ${ebDelta == null ? "no prior period" : (ebDelta >= 0 ? "+" + ebDelta : ebDelta) + " vs " + priorName}` : "no data in selected range" }; })(),
+    (() => { const st = statusFor(goliveDelta, glWinTotal, false); return {
+      label: "Go-Lives", icon: '<path d="M5 13l4 4L19 7"/>', st,
+      foot: hasWin ? `${glWinTotal.toLocaleString()} went live · ${goliveDelta == null ? "no prior period" : (goliveDelta >= 0 ? "+" + goliveDelta : goliveDelta) + " vs " + priorName}` : "no data in selected range" }; })(),
   ];
-  document.getElementById("kpis").innerHTML = kpis.map((k, i) => `<div class="card kpi${i === 3 ? " kpi-click" : ""}" data-share="kpi-${i}"${i === 3 ? ' data-pend="1" role="button" tabindex="0" title="Click to see which implementations"' : ""}>
+  document.getElementById("kpis").innerHTML = kpis.map((k, i) => `<div class="card kpi" data-share="kpi-${i}">
     <div class="kl">${k.label}<span class="ki"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px">${k.icon}</svg></span></div>
-    <div class="kv">${typeof k.val === "number" ? k.val.toLocaleString() : k.val} ${k.pill}</div><div class="kfoot">${k.foot}</div></div>`).join("")
-    + `<div class="kpi-note">Products overlap · an implementation can be both, counted once in the total</div>`;
+    <div class="kv kv-status ${k.st.cls}" title="${k.st.why}">${k.st.word}</div><div class="kfoot">${k.foot}</div></div>`).join("")
+    + `<div class="kpi-note">Status compares the selected period with the one before it · within 2% counts as Stable · products overlap, an implementation can be both</div>`;
 
   // backlog — daily line within window, under the cohort filter
   document.getElementById("backlogNow").textContent = bl(cur).toLocaleString() + (cohort === "all" ? "" : "");
@@ -699,9 +730,12 @@ function render(store) {
   document.getElementById("goliveNow").textContent = glWinTotal.toLocaleString();
   document.getElementById("golivePill").innerHTML = goliveDelta != null ? pill(goliveDelta, false) + ` <span style="font-size:12px;color:var(--hint)">vs ${priorName}</span>` : "";
   barChart("goliveChart", glKeys.map(k => ({ m: k, v: glAll[k] })), glFmt, glBucket, viewRange);
-  document.getElementById("goliveCap").textContent = glWinTotal
+  const pcAll = store.pendingClose || [];
+  const pcN = pcAll.filter(p => cohort === "all" || (p.types || []).includes(cohort)).length;
+  document.getElementById("goliveCap").innerHTML = (glWinTotal
     ? `${glWinTotal} implementation${glWinTotal === 1 ? "" : "s"} went live in the selected period` + (goliveDelta != null ? ` · ${goliveDelta >= 0 ? goliveDelta + " more" : Math.abs(goliveDelta) + " fewer"} than the ${winLen} days before.` : ".")
-    : "No go-lives in the selected period.";
+    : "No go-lives in the selected period.")
+    + (pcN ? ` <button type="button" class="linky" data-pend="1">${pcN} went live but not closed out · view list</button>` : "");
   document.getElementById("breakdown").style.display = cohort === "all" ? "" : "none";
   const bdTot = cur.total || 1;
   document.getElementById("breakdown").innerHTML = [
@@ -747,27 +781,9 @@ function render(store) {
   }
 
   // stage feature — TradingView watchlist + DAILY price chart, reconstructed from stage entered/exited dates
-  const sd = sdSel(store);                              // respects the cohort filter (All / CAREpoint / e-Bridge)
   document.querySelector("#sec-stage h3").textContent = "TIME IN STAGE" + cohortLabel();
-  const sdDays = sd.days || [];
-  // List values and badges read at the END of the selected window (not the newest data), so the list agrees with the chart.
-  let sdEnd = -1; sdDays.forEach((d, i) => { if (!viewRange.to || d <= viewRange.to) sdEnd = i; });
-  let sdStart = 0; if (viewRange.from) { sdStart = sdDays.findIndex(d => d >= viewRange.from); if (sdStart < 0) sdStart = sdDays.length; }
+  const { sd, sdDays, sdStart, sdEnd, rows } = computeStageRows(store);
   function stageArr(s) { return (sd.series && sd.series[s]) || []; }
-  function stageCur(s) { const a = stageArr(s); return sdEnd >= 0 && a[sdEnd] != null ? a[sdEnd] : null; }
-  function stageTrend(s) {                            // end of window vs ~30 days earlier (clamped to the window); down = clearing (good)
-    const a = stageArr(s); if (!a.length || sdEnd < 0 || sdStart > sdEnd) return { kind: "empty" };
-    const cur = a[sdEnd];
-    if (cur == null) return a.slice(sdStart, sdEnd + 1).some(v => v != null) ? { kind: "cleared" } : { kind: "empty" };
-    const target = Math.max(sdStart, sdEnd - 30); let prev = null;
-    for (let i = target; i >= sdStart; i--) if (a[i] != null) { prev = a[i]; break; }
-    if (prev == null) for (let i = target + 1; i < sdEnd; i++) if (a[i] != null) { prev = a[i]; break; }
-    if (prev == null) return { kind: "new" };
-    const d = cur - prev, pct = prev ? d / prev * 100 : null;
-    if (Math.abs(pct == null ? 0 : pct) < 10 && pct != null) return { kind: "flat", d, pct };
-    if (pct == null && d === 0) return { kind: "flat", d, pct };
-    return { kind: d > 0 ? "up" : "down", d, pct };
-  }
   function trendBadge(t) {
     const pctTxt = t.pct == null ? null : Math.round(Math.abs(t.pct)) + "%";
     if (t.kind === "up") return `<span class="pill bad worse" title="up ${t.d}d vs ~30 days earlier">&#9650; ${pctTxt != null ? pctTxt : t.d + "d"}</span>`;
@@ -777,8 +793,6 @@ function render(store) {
     if (t.kind === "new") return `<span class="pill flat">new</span>`;
     return `<span class="pill flat">—</span>`;
   }
-  const rows = CONFIG.pipelineStages.map(st => ({ st, cur: stageCur(st), open: sd.open[st] ?? 0, t: stageTrend(st) }))
-    .sort((a, b) => (b.cur ?? -1) - (a.cur ?? -1) || b.open - a.open);
 
   if (!selectedStage || !CONFIG.pipelineStages.includes(selectedStage)) selectedStage = rows[0] ? rows[0].st : null;
 
@@ -874,9 +888,9 @@ function applyTheme(t) { document.documentElement.setAttribute("data-theme", t);
 /* ---------- share ---------- */
 const SHARE_CARDS = [
   { id: "kpi-0", label: "Open implementations (backlog) · number" },
-  { id: "kpi-1", label: "CAREpoint open · number" },
+  { id: "kpi-1", label: "CAREpoint · status" },
   { id: "kpi-2", label: "e-Bridge open · number" },
-  { id: "kpi-3", label: "Went live, not closed out · number" },
+  { id: "kpi-3", label: "Go-Lives · status" },
   { id: "sec-backlog", label: "Open pipeline trend (backlog)" },
   { id: "sec-stage", label: "Time in stage" },
   { id: "sec-speed", label: "PO to go-live" },
@@ -965,14 +979,56 @@ function fmtDateTime(iso) { const d = new Date(iso); return d.toLocaleDateString
 
 function showView(v) {
   currentView = v;
-  const hist = document.getElementById("history"), howto = document.getElementById("howto");
+  const hist = document.getElementById("history"), howto = document.getElementById("howto"), sbd = document.getElementById("stagebd");
   hist.classList.toggle("hidden", v !== "history");
   howto.classList.toggle("hidden", v !== "howto");
+  if (sbd) sbd.classList.toggle("hidden", v !== "stagebd");
   document.querySelectorAll(".nav a").forEach(x =>
     x.classList.toggle("on", v === "dash" ? x.dataset.goto === "kpis" : x.dataset.view === v));
   if (v === "history") renderHistory();
+  if (v === "stagebd") renderStageBd();
   if (v !== "history") document.getElementById("histPreview").classList.add("hidden");
   render(loadStore());
+}
+let sbSort = { col: "cur", dir: -1 };                     // default: slowest first (matches the watchlist)
+function renderStageBd() {
+  const store = loadStore();
+  const { rows } = computeStageRows(store);
+  const totOpen = rows.reduce((s, r) => s + (r.open || 0), 0) || 1;
+  const enr = rows.map(r => {
+    const share = (r.open || 0) / totOpen * 100;
+    const load = r.open === 0 ? { w: "\u2014", cls: "flat" } : share >= 15 ? { w: "Heavy", cls: "warn" } : share >= 5 ? { w: "Moderate", cls: "flat" } : { w: "Light", cls: "flat" };
+    const tr = r.t.kind === "up" ? { w: "Slowing", cls: "bad" } : r.t.kind === "down" ? { w: "Clearing", cls: "good" }
+      : r.t.kind === "cleared" ? { w: "Cleared", cls: "good" } : r.t.kind === "flat" ? { w: "Steady", cls: "flat" }
+      : r.t.kind === "new" ? { w: "New", cls: "flat" } : { w: "\u2014", cls: "flat" };
+    return { ...r, share, load, tr, pct: r.t.pct == null ? null : Math.round(r.t.pct) };
+  });
+  const key = { stage: r => r.st, trend: r => r.tr.w, load: r => r.share, pct: r => r.pct ?? -999, open: r => r.open, share: r => r.share, cur: r => r.cur ?? -1 }[sbSort.col];
+  enr.sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * sbSort.dir; });
+  document.getElementById("sbSub").textContent = `Every stage's health at a glance${cohortLabel()} · ${fmtDay(viewRange.from)} to ${fmtDay(viewRange.to)} · click a column to sort`;
+  const hdr = [["stage", "Stage"], ["trend", "Trend"], ["load", "Load"], ["pct", "vs ~30d"], ["open", "Open"], ["share", "% of backlog"], ["cur", "Avg days"]];
+  const arrow = c => sbSort.col === c ? (sbSort.dir < 0 ? " \u25be" : " \u25b4") : "";
+  document.getElementById("sbTable").innerHTML =
+    `<div class="sb-grid">` + hdr.map(([c, l], i) => `<div class="sb-h${i > 2 ? " sb-r" : ""}" data-sb="${c}" title="click to sort">${l}${arrow(c)}</div>`).join("") + `</div>`
+    + enr.map(r => `<div class="sb-grid sb-row" data-stage="${r.st}" role="button" tabindex="0">
+      <span class="sb-name" title="${r.st}">${r.st}</span>
+      <span class="pill ${r.tr.cls === "warn" ? "flat" : r.tr.cls}">${r.tr.w}</span>
+      <span class="pill ${r.load.cls === "warn" ? "bad" : "flat"}" ${r.load.w === "Heavy" ? 'style="background:rgba(240,162,78,.18);color:#b7791f"' : ""}>${r.load.w}</span>
+      <span class="sb-r">${r.pct == null ? (r.t.d != null ? (r.t.d >= 0 ? "+" + r.t.d + "d" : r.t.d + "d") : "\u2014") : (r.pct >= 0 ? "\u25b2 " + r.pct + "%" : "\u25bc " + Math.abs(r.pct) + "%")}</span>
+      <span class="sb-r">${r.open || 0}</span>
+      <span class="sb-r">${r.open ? Math.round(r.share) + "%" : "\u2014"}</span>
+      <span class="sb-r">${r.cur != null ? r.cur + "d" : "\u2014"}</span>
+    </div>`).join("");
+  document.querySelectorAll("[data-sb]").forEach(h => h.addEventListener("click", () => {
+    const c = h.dataset.sb;
+    sbSort = sbSort.col === c ? { col: c, dir: -sbSort.dir } : { col: c, dir: c === "stage" ? 1 : -1 };
+    renderStageBd();
+  }));
+  document.querySelectorAll("#sbTable .sb-row").forEach(el => {
+    const pick = () => { selectedStage = el.dataset.stage; showView("dash"); setTimeout(() => document.getElementById("sec-stage").scrollIntoView({ behavior: "smooth" }), 100); };
+    el.addEventListener("click", pick);
+    el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+  });
 }
 function renderHistory() {
   const arr = loadImports();
@@ -1067,7 +1123,7 @@ function init() {
     if (e.target && e.target.id === "importNoteX") noteHide();
     if (e.target && e.target.id === "noteBackup") document.getElementById("backup").click();
     const pk = e.target && e.target.closest ? e.target.closest('[data-pend="1"]') : null;
-    if (pk) { pendOpen = !pendOpen; renderPendPanel(loadStore()); if (pendOpen) document.getElementById("pendPanel").scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+    if (pk) { pendOpen = !pendOpen; renderPendPanel(loadStore()); if (pendOpen) document.getElementById("pendPanel").scrollIntoView({ behavior: "smooth", block: "center" }); }
   });
   document.addEventListener("keydown", e => {
     if ((e.key === "Enter" || e.key === " ") && e.target && e.target.matches && e.target.matches('[data-pend="1"]')) { e.preventDefault(); pendOpen = !pendOpen; renderPendPanel(loadStore()); }
@@ -1147,6 +1203,7 @@ function init() {
     a.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });   // href-less anchors don't activate natively
   });
   document.getElementById("histBack").addEventListener("click", () => showView("dash"));
+  const sbB = document.getElementById("sbBack"); if (sbB) sbB.addEventListener("click", () => showView("dash"));
   document.getElementById("howtoBack").addEventListener("click", () => showView("dash"));
 
   // Collapsible stage selector (TradingView watchlist behavior) — chart reflows to full card width.
