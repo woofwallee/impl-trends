@@ -202,9 +202,9 @@ function fmtMonth(k) { if (!k) return "—"; const [y, m] = k.split("-").map(Num
 function statusFor(delta, level, lowerBetter) {           // KPI cards: direction words, not judgments
   if (delta == null) return { word: "No comparison", cls: "flat", why: "no prior period in the data" };
   const dead = Math.max(1, Math.round(0.02 * Math.max(level || 0, 1)));
-  if (Math.abs(delta) <= dead) return { word: "Stable", cls: "flat", why: `within ${dead} of the prior period (2% deadband)` };
+  if (Math.abs(delta) <= dead) return { word: "Steady", cls: "flat", why: `within ${dead} of the prior period (2% deadband)` };
   const up = delta > 0, good = lowerBetter ? !up : up;
-  return { word: up ? "Increasing" : "Decreasing", cls: good ? "good" : "bad",
+  return { word: up ? "Rising" : "Falling", cls: good ? "good" : "bad",
     why: `${up ? "+" : ""}${delta} vs the prior period` };
 }
 function pill(d, lowerBetter) { if (d == null) return `<span class="pill flat">no prior period in data</span>`; if (d === 0) return `<span class="pill flat">0</span>`;
@@ -704,8 +704,8 @@ function render(store) {
   ];
   document.getElementById("kpis").innerHTML = kpis.map((k, i) => `<div class="card kpi" data-share="kpi-${i}">
     <div class="kl">${k.label}<span class="ki"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px">${k.icon}</svg></span></div>
-    <div class="kv kv-status ${k.st.cls}" title="${k.st.why}">${k.st.word}</div><div class="kfoot">${k.foot}</div></div>`).join("")
-    + `<div class="kpi-note">Status compares the selected period with the one before it · within 2% counts as Stable · products overlap, an implementation can be both</div>`;
+    <div class="kv-cap">Trend</div><div class="kv kv-status ${k.st.cls}" title="${k.st.why}">${k.st.word}</div><div class="kfoot">${k.foot}</div></div>`).join("")
+    + `<div class="kpi-note">Trend compares the selected period with the one before it · within 2% counts as Steady · products overlap, an implementation can be both</div>`;
 
   // backlog — daily line within window, under the cohort filter
   document.getElementById("backlogNow").textContent = bl(cur).toLocaleString() + (cohort === "all" ? "" : "");
