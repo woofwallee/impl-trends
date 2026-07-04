@@ -614,7 +614,8 @@ function renderInsights(findings) {
 /* ---------- render ---------- */
 function render(store) {
   const dash = document.getElementById("dashboard"), empty = document.getElementById("empty");
-  if (currentView !== "dash") { dash.classList.add("hidden"); empty.classList.add("hidden"); if (!store.lastImport) return; }
+  if (currentView !== "dash") { dash.classList.add("hidden"); empty.classList.add("hidden"); if (!store.lastImport) return;
+    if (currentView === "stagebd") renderStageBd(); }                   // timeframe/product changes refresh the breakdown live
   else if (!store.lastImport) { dash.classList.add("hidden"); empty.classList.remove("hidden"); return; }
   else { empty.classList.add("hidden"); dash.classList.remove("hidden"); }
 
