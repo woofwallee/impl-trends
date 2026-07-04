@@ -749,7 +749,12 @@ function render(store) {
     ? `<span><b style="color:var(--bad)">${up}</b> rising</span><span><b style="color:var(--good)">${down}</b> falling</span><span><b>${flat}</b> flat</span>`
     : `<span>This needs the stage date columns · included when you export with "All properties"</span>`;
 
-  document.getElementById("subtitle").textContent = `${store.lastImport.records.toLocaleString()} implementations · ${fmtDay(viewRange.from)} to ${fmtDay(viewRange.to)}` + (store.demo ? " · SAMPLE DATA" : "");
+  const dataThrough = bounds ? bounds[1] : null;
+  const importedOn = store.lastImport.when ? store.lastImport.when.slice(0, 10) : null;
+  document.getElementById("subtitle").textContent = `${store.lastImport.records.toLocaleString()} implementations · ${fmtDay(viewRange.from)} to ${fmtDay(viewRange.to)}`
+    + (dataThrough ? ` · data through ${fmtDay(dataThrough)}` : "") + (importedOn ? ` · imported ${fmtDay(importedOn)}` : "")
+    + (store.demo ? " · SAMPLE DATA" : "");
+  const dB = document.getElementById("demoBanner"); if (dB) dB.classList.toggle("hidden", !store.demo);
 }
 
 function syncRangeInputs() {                              // reflect viewRange into the day-level date inputs
@@ -808,7 +813,7 @@ function sharePNG() {
   const bg = dark ? "#0e1320" : "#eef1f5";
   if (sel.length === SHARE_CARDS.length) {
     html2canvas(document.getElementById("dashboard"), { backgroundColor: bg, scale: 2, useCORS: true }).then(cv => {
-      const a = document.createElement("a"); a.href = cv.toDataURL("image/png"); a.download = "implementation-trends.png"; a.click();
+      const a = document.createElement("a"); a.href = stampCanvas(cv, bg).toDataURL("image/png"); a.download = "implementation-trends.png"; a.click();
     }).catch(() => toast("PNG export failed.", true));
     return;
   }
@@ -824,8 +829,20 @@ function sharePNG() {
     const name = sel.length === 1
       ? SHARE_CARDS.find(c => c.id === sel[0]).label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
       : "implementation-trends-selected";
-    const a = document.createElement("a"); a.href = out.toDataURL("image/png"); a.download = name + ".png"; a.click();
+    const a = document.createElement("a"); a.href = stampCanvas(out, bg).toDataURL("image/png"); a.download = name + ".png"; a.click();
   }).catch(() => toast("PNG export failed.", true));
+}
+function stampCanvas(cv, bg) {                            // exports carry their own context: period, filter, freshness, demo flag
+  const dark = bg === "#0e1320";
+  const line = document.getElementById("subtitle").textContent + (cohort === "all" ? "" : " · " + cohort + " only");
+  const out = document.createElement("canvas"); out.width = cv.width; out.height = cv.height + 56;
+  const ctx = out.getContext("2d");
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(cv, 0, 0);
+  ctx.font = "22px -apple-system, Segoe UI, sans-serif";
+  ctx.fillStyle = dark ? "#8b97a8" : "#77808f";
+  ctx.fillText(line, 24, cv.height + 36);
+  return out;
 }
 
 function sharePDF() {
@@ -1026,7 +1043,7 @@ function init() {
       s0 = rebuilt; saveStore(s0);
     } catch (e) { } }
   }
-  if (!s0.lastImport && !localStorage.getItem("impl_trends_demo_off")) loadDemo();
+  if (!s0.lastImport) render(s0);                         // no data: show the guided empty state (Load sample is a button there)
   else {
     const saved = localStorage.getItem(TF_KEY), b = dataDayBounds(s0);
     if (saved && b && saved.startsWith("custom:")) {
