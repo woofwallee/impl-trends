@@ -548,9 +548,11 @@ function renderPendPanel(store) {
 }
 function renderInsights(findings) {
   const box = document.getElementById("stageInsights"); if (!box) return;
-  box.innerHTML = findings.map(f => f.kind === "none"
+  const hasRows = findings.some(f => f.kind !== "none");
+  box.innerHTML = (hasRows ? `<div class="ins-hdr"><span></span><span>Stage</span><span>What&#39;s happening</span></div>` : "")
+    + findings.map(f => f.kind === "none"
     ? `<div class="ins-card flat"><span class="ins-dot flat"></span><span>${insightText(f)}</span></div>`
-    : `<button type="button" class="ins-card" data-stage="${f.stage}"><span class="ins-dot ${f.severity}"></span><b>${f.stage}</b><span>${insightText(f)}</span><span class="ins-go">chart it &#8594;</span></button>`).join("");
+    : `<button type="button" class="ins-card" data-stage="${f.stage}"><span class="ins-dot ${f.severity}"></span><b title="${f.stage}">${f.stage}</b><span class="ins-txt">${insightText(f)}</span><span class="ins-go">chart it &#8594;</span></button>`).join("");
   box.querySelectorAll("button.ins-card").forEach(b =>
     b.addEventListener("click", () => { selectedStage = b.dataset.stage; render(loadStore()); }));
 }
