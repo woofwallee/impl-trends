@@ -26,11 +26,24 @@ const CONFIG = {
 };
 const MS_PER_DAY = 86400000, STORE_KEY = "impl_trends_history_v1", THEME_KEY = "impl_trends_theme";
 const CP = "#2f6ded", EB = "#ea8a2f", GOOD = "#15803d", BAD = "#dc2626", GRAY = "#9aa2af", BLUE = "#2f6ded";
+// TradingView Baseline palette, mapped to BUSINESS health (all baseline charts here are lower-is-better):
+// above the baseline = worsening (red), below = improving (green). Gray = no baseline / no change.
+const TV = { good: "#00C896", goodFill: "rgba(0,200,150,.15)", bad: "#FF4D5A", badFill: "rgba(255,77,90,.15)" };
 const FLOOR_YEAR = 2025, MAX_YEAR = 2030;   // Implementation object created Aug 2025; picker scales to 2030
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const LIVE_STAGE = "Implementation Live/Complete";
 let viewRange = { from: null, to: null };
 let selectedStage = null;
+let wlCollapsed = false;                                 // stage-list sidebar state; session-only (resets on refresh)
+function syncWlToggle() {
+  const w = document.getElementById("stageWrap"), b = document.getElementById("wlToggle");
+  if (!w || !b) return;
+  w.classList.toggle("collapsed", wlCollapsed);
+  b.innerHTML = wlCollapsed ? "&#8250;" : "&#8249;";
+  b.title = wlCollapsed ? "Show stage list" : "Hide stage list";
+  b.setAttribute("aria-expanded", String(!wlCollapsed));
+  b.setAttribute("aria-label", b.title);
+}
 let cohort = "all";                                      // "all" | "CAREpoint" | "e-Bridge"
 function m2Map(store) { const m = store.m2 || {}; return m.all ? m : { all: m }; }               // legacy stores wrap as all
 function sdMap(store) { const s = store.stageDaily || {}; return s.all ? s : { all: s }; }
@@ -208,18 +221,24 @@ function themeColors() { const dark = document.documentElement.getAttribute("dat
 /* ---------- charts ---------- */
 const charts = {};
 function destroy(id) { if (charts[id]) { charts[id].destroy(); delete charts[id]; } }
+function lblDate(l) { l = String(l); return l.length === 7 ? l + "-01" : l; }          // month keys sort like days
+function lblTimes(c) { return c.$lblTimes || (c.$lblTimes = (c.data.labels || []).map(l => new Date(lblDate(l) + "T00:00:00Z").getTime())); }
+
 // TradingView-style last-value marker: dotted line at the latest value, end dot, and a price-style label on the right axis
 const lastValue = { id: "lastval", afterDatasetsDraw(c) {
   const ds = c.data.datasets[0]; if (!ds || c.config.type !== "line") return;
   let i = ds.data.length - 1; while (i >= 0 && ds.data[i] == null) i--;
   if (i < 0) return;
   const pt = c.getDatasetMeta(0).data[i]; if (!pt) return;
-  const { left, right } = c.chartArea, y = pt.y, ctx = c.ctx, col = ds.borderColor;
+  const b = (c.options.plugins || {}).baseValue;
+  const col = b == null ? themeColors().line : (ds.data[i] > b ? TV.bad : ds.data[i] < b ? TV.good : GRAY);
+  const { left, right, top, bottom } = c.chartArea, y = pt.y, ctx = c.ctx;
+  if (y < top || y > bottom) return;
   ctx.save();
   ctx.setLineDash([2, 3]); ctx.strokeStyle = col; ctx.globalAlpha = .55; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
-  ctx.setLineDash([]); ctx.globalAlpha = 1;
-  ctx.fillStyle = col; ctx.beginPath(); ctx.arc(pt.x, y, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.setLineDash([]); ctx.globalAlpha = 1; ctx.fillStyle = col;
+  if (pt.x >= left && pt.x <= right) { ctx.beginPath(); ctx.arc(pt.x, y, 3, 0, Math.PI * 2); ctx.fill(); }
   const txt = String(ds.data[i]); ctx.font = "600 10.5px Inter, system-ui, sans-serif";
   const w = ctx.measureText(txt).width + 10, h = 17;
   ctx.beginPath(); ctx.roundRect(right + 1, y - h / 2, w, h, 4); ctx.fill();
@@ -227,53 +246,198 @@ const lastValue = { id: "lastval", afterDatasetsDraw(c) {
   ctx.restore();
 } };
 
-// TV Baseline-style dotted reference line at the base level
+// TV Baseline: thin, subtle dashed reference line at the base level
 const baseLine = { id: "baseline", beforeDatasetsDraw(c) {
   const b = (c.options.plugins || {}).baseValue;
   if (b == null || !c.scales.y) return;
   const y = c.scales.y.getPixelForValue(b), { left, right } = c.chartArea, ctx = c.ctx;
   if (y < c.chartArea.top || y > c.chartArea.bottom) return;
-  ctx.save(); ctx.setLineDash([3, 4]); ctx.lineWidth = 1; ctx.strokeStyle = "#9aa2af"; ctx.globalAlpha = .5;
+  const dark = document.documentElement.getAttribute("data-theme") === "dark";
+  ctx.save(); ctx.setLineDash([3, 4]); ctx.lineWidth = 1;
+  ctx.strokeStyle = dark ? "rgba(255,255,255,.20)" : "rgba(0,0,0,.20)";   // spec color; black-based twin for light theme
   ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke(); ctx.restore();
 } };
-// Baseline dataset styling (TV Baseline chart adapted to lower-is-better metrics):
-// above the base = red line + red fill toward the base, below = green. Base = first value in the window.
-function baselineDataset(vals, extra) {
-  let base = null, last = null;
-  for (const v of vals) if (v != null) { if (base == null) base = v; last = v; }
-  return { base, dataset: Object.assign({
-    data: vals, borderWidth: 1.6, tension: 0, pointRadius: 0,
-    borderColor: (last != null && base != null && last > base) ? BAD : GOOD,   // end-state color (feeds the value label)
-    segment: { borderColor: c => ((c.p0.parsed.y + c.p1.parsed.y) / 2 > base ? BAD : GOOD) },
-    fill: base == null ? false : { target: { value: base }, above: BAD + "1f", below: GOOD + "1f" },
-  }, extra || {}) };
+
+// Exact-crossing color split (TV Baseline): the positive/negative line copies are clipped at the
+// baseline pixel, so the stroke changes color exactly where it crosses — not per data segment.
+const tvClip = { id: "tvclip",
+  beforeDatasetDraw(c, args) {
+    const ds = c.data.datasets[args.index]; if (!ds || !ds._tvRole) return;
+    const b = (c.options.plugins || {}).baseValue; if (b == null || !c.scales.y) return;
+    const a = c.chartArea, yb = Math.min(Math.max(c.scales.y.getPixelForValue(b), a.top), a.bottom), ctx = c.ctx;
+    ctx.save(); ctx.beginPath();
+    if (ds._tvRole === "pos") ctx.rect(a.left, a.top, a.right - a.left, yb - a.top);
+    else ctx.rect(a.left, yb, a.right - a.left, a.bottom - yb);
+    ctx.clip();
+  },
+  afterDatasetDraw(c, args) {
+    const ds = c.data.datasets[args.index]; if (!ds || !ds._tvRole) return;
+    const b = (c.options.plugins || {}).baseValue; if (b == null || !c.scales.y) return;
+    c.ctx.restore();
+  } };
+
+/* TV Baseline datasets. Baseline = first VISIBLE value; fill splits exactly at the baseline;
+   above = positive, below = negative. Flat colors — no gradients, no trend-direction coloring. */
+function firstVisible(vals, lo, hi) {
+  for (let i = Math.max(0, Math.ceil(lo)); i <= Math.min(vals.length - 1, Math.floor(hi)); i++) if (vals[i] != null) return vals[i];
+  return null;
 }
-function areaChart(id, pts, height, labelFmt) {
-  labelFmt = labelFmt || fmtMonth;
-  destroy(id); const el = document.getElementById(id); if (!el) return; const tc = themeColors();
-  const { base, dataset } = baselineDataset(pts.map(p => p.v), { pointHoverRadius: 4, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2 });
-  charts[id] = new Chart(el, { type: "line",
-    data: { labels: pts.map(p => p.m), datasets: [dataset] },
-    options: { responsive: true, maintainAspectRatio: false, devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2), interaction: { mode: "index", intersect: false },
-      plugins: { baseValue: base, legend: { display: false }, tooltip: { callbacks: { title: c => labelFmt(c[0].label), label: c => ` ${c.parsed.y}` } } },
-      scales: { x: { grid: { display: false }, ticks: { color: tc.tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 7, callback: function (v) { return labelFmt(this.getLabelForValue(v)); } } },
-        y: { position: "right", grace: "12%", min: 0, grid: { color: tc.grid, drawBorder: false }, ticks: { color: tc.tick, maxTicksLimit: 5 } } } },
-    plugins: [crosshair, baseLine, lastValue] });
-}
-function barChart(id, pts, fmt, bucket) {
-  fmt = fmt || fmtMonth; bucket = bucket || "month";
-  destroy(id); const el = document.getElementById(id); if (!el) return; const tc = themeColors();
-  charts[id] = new Chart(el, { type: "bar",
-    data: { labels: pts.map(p => p.m), datasets: [{ data: pts.map(p => p.v), backgroundColor: tc.line, borderRadius: 5, borderSkipped: false, barPercentage: .7, categoryPercentage: .8 }] },
-    options: { responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { callbacks: { title: c => (bucket === "week" ? "Week of " : "") + fmt(c[0].label), label: c => ` ${c.parsed.y} go-live${c.parsed.y === 1 ? "" : "s"}` } } },
-      scales: { x: { grid: { display: false }, ticks: { color: tc.tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 8, callback: function (v) { const l = this.getLabelForValue(v); return bucket === "month" ? l.slice(2) : fmt(l).replace(/, \d+$/, ""); } } },
-        y: { grid: { color: tc.grid, drawBorder: false }, ticks: { color: tc.tick, maxTicksLimit: 5, precision: 0 }, beginAtZero: true } } } });
+function tvBaselineDatasets(vals, i0, i1, extra) {
+  const base = firstVisible(vals, i0, i1);
+  const core = Object.assign({ data: vals, borderWidth: 1.6, tension: 0, pointRadius: 0 }, extra || {});
+  if (base == null) return { base, datasets: [Object.assign({}, core, { borderColor: GRAY, fill: false })] };
+  const carrier = Object.assign({}, core, {               // interaction + fill carrier; the visible strokes are the clipped copies
+    borderColor: "rgba(0,0,0,0)", borderWidth: 0,
+    pointHoverBackgroundColor: t => { const b = t.chart.options.plugins.baseValue, v = t.parsed ? t.parsed.y : null; return v == null || b == null ? GRAY : v > b ? TV.bad : v < b ? TV.good : GRAY; },
+    fill: { target: { value: base }, above: TV.badFill, below: TV.goodFill },
+  });
+  const line = role => Object.assign({}, core, { borderColor: role === "pos" ? TV.bad : TV.good, fill: false, pointRadius: 0, pointHoverRadius: 0, _tvRole: role });
+  return { base, datasets: [carrier, line("pos"), line("neg")] };
 }
 
+/* ---------- shared TV interaction layer (viewport, pan/zoom, toolbar, crosshair sync) ---------- */
+function vpIdx(labels, vp) {                              // [i0,i1] viewport indices for the selected date range
+  let i0 = 0, i1 = Math.max(0, labels.length - 1);
+  if (vp && vp.from) { const j = labels.findIndex(l => lblDate(l) >= vp.from); if (j >= 0) i0 = j; }
+  if (vp && vp.to) { let j = -1; for (let k = labels.length - 1; k >= 0; k--) if (lblDate(labels[k]) <= vp.to) { j = k; break; } if (j >= 0) i1 = j; }
+  if (i1 <= i0) { i0 = 0; i1 = Math.max(0, labels.length - 1); }
+  return [i0, i1];
+}
+let vpUserSet = false;                                    // becomes true when the user picks a preset/date range
+function chartVp(labels, vp) {                            // default: last 2 weeks in days (movement visible); user selection overrides
+  if (vpUserSet) return vpIdx(labels, vp);
+  const n = labels.length; if (!n) return [0, 0];
+  const last = lblDate(labels[n - 1]);
+  const cut = dstr(new Date(new Date(last + "T00:00:00Z").getTime() - 13 * MS_PER_DAY));
+  let i0 = labels.findIndex(l => lblDate(l) >= cut);
+  if (i0 < 0 || i0 >= n - 1) i0 = Math.max(0, n - 2);     // always at least 2 points visible
+  return [i0, n - 1];
+}
+function yBounds(vals, i0, i1, base) {                    // TV-style: y axis fits the visible data (+ the baseline)
+  let lo = Infinity, hi = -Infinity;
+  for (let i = Math.max(0, Math.floor(i0)); i <= Math.min(vals.length - 1, Math.ceil(i1)); i++) {
+    const v = vals[i]; if (v == null) continue; if (v < lo) lo = v; if (v > hi) hi = v;
+  }
+  if (base != null) { lo = Math.min(lo, base); hi = Math.max(hi, base); }
+  if (!isFinite(lo)) return null;
+  const pad = ((hi - lo) || Math.max(1, Math.abs(hi) * .1)) * .12;
+  return { min: Math.max(0, lo - pad), max: hi + pad };
+}
+function tvRebase(c) {                                    // after a viewport change: recompute baseline + refit y in ONE cheap update
+  if (!c || !c.scales.x) return;
+  const p = c.options.plugins || {}, ds = c.data.datasets[0];
+  if ("baseValue" in p && ds) {
+    const nb = firstVisible(ds.data, c.scales.x.min, c.scales.x.max);
+    if (nb != null && nb !== p.baseValue) {
+      p.baseValue = nb;
+      if (ds.fill && typeof ds.fill === "object") ds.fill = { target: { value: nb }, above: TV.badFill, below: TV.goodFill };
+    }
+  }
+  if (ds && c.options.scales.y && !c.options.scales.y.beginAtZero) {
+    const yb = yBounds(ds.data, c.scales.x.min, c.scales.x.max, ("baseValue" in p) ? p.baseValue : null);
+    if (yb) { c.options.scales.y.min = yb.min; c.options.scales.y.max = yb.max; }
+  }
+  c.update("none");
+}
+function tvZoom(n) { return {
+  limits: { x: { min: 0, max: Math.max(0, n - 1), minRange: 1 } },   // pan/zoom stays within the data
+  pan: { enabled: true, mode: "x", onPanComplete: ({ chart }) => tvRebase(chart) },
+  zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x", onZoomComplete: ({ chart }) => tvRebase(chart) },
+}; }
+const XGROUP = ["backlogChart", "speedChart", "goliveChart", "stageBig"];
+const XSYNC = { date: null, src: null };
+function tvRedrawOthers(srcId) { XGROUP.forEach(id => { if (id !== srcId && charts[id]) charts[id].draw(); }); }
+function tvAttach(id, withToolbar) {                      // crosshair sync + double-click reset (+ toolbar where supported)
+  const c = charts[id]; if (!c) return; const el = c.canvas;
+  el.ondblclick = () => { const cc = charts[id]; if (cc) { cc.resetZoom("none"); tvRebase(cc); } };
+  el.onmouseleave = () => { if (XSYNC.src === id) { XSYNC.date = null; XSYNC.src = null; tvRedrawOthers(id); } };
+  const wrap = el.closest(".canvas-wrap");
+  if (withToolbar === false) { if (wrap) { const old = wrap.querySelector(".tvbar"); if (old) old.remove(); } return; }
+  tvToolbar(id);
+}
+function tvToolbar(id) {                                  // TV-style chart toolbar; injected once per canvas wrap
+  const el = document.getElementById(id); if (!el) return;
+  const wrap = el.closest(".canvas-wrap"); if (!wrap || wrap.querySelector(".tvbar")) return;
+  const bar = document.createElement("div"); bar.className = "tvbar"; bar.setAttribute("data-html2canvas-ignore", "");
+  // TradingView floating bar: [− +] [‹ ›] [⟲] — hover names appear after a short delay (CSS tooltip)
+  bar.innerHTML = [["out", "Zoom out", "&minus;"], ["in", "Zoom in", "+"], ["back", "Scroll to the left", "&#8249;"], ["fwd", "Scroll to the right", "&#8250;"], ["reset", "Reset chart view", "&#8634;"]]
+    .map(([a, t, s]) => `<button type="button" data-act="${a}" data-tip="${t}">${s}</button>`).join("");
+  bar.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    const c = charts[id]; if (!c) return; const n = (c.data.labels || []).length;
+    if (b.dataset.act === "back" || b.dataset.act === "fwd") {          // step half a screen through time, clamped to the data
+      const x = c.scales.x, span = Math.max(2, x.max - x.min);
+      let shift = Math.max(1, Math.round(span / 2)) * (b.dataset.act === "back" ? -1 : 1);
+      shift = Math.max(-x.min, Math.min(shift, Math.max(0, n - 1 - x.max)));
+      if (shift) c.zoomScale("x", { min: x.min + shift, max: x.max + shift }, "none");
+    }
+    else if (b.dataset.act === "in") c.zoom({ x: 1.25 });
+    else if (b.dataset.act === "out") c.zoom({ x: 0.8 });
+    else if (b.dataset.act === "reset") c.resetZoom("none");
+    tvRebase(c);
+  });
+  wrap.appendChild(bar);
+}
+
+function areaChart(id, pts, height, labelFmt, vp, opts) { // the ONE baseline-chart implementation (shared by all three)
+  labelFmt = labelFmt || fmtMonth; opts = opts || {};
+  destroy(id); const el = document.getElementById(id); if (!el) return; const tc = themeColors();
+  const labels = pts.map(p => p.m), vals = pts.map(p => p.v);
+  const [i0, i1] = chartVp(labels, vp);
+  const { base, datasets } = tvBaselineDatasets(vals, i0, i1, { pointHoverRadius: 4, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2 });
+  const yb = yBounds(vals, i0, i1, base) || { min: 0, max: 1 };
+  charts[id] = new Chart(el, { type: "line",
+    data: { labels, datasets },
+    options: { animation: false, responsive: true, maintainAspectRatio: false, devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2), interaction: { mode: "index", intersect: false },
+      onHover: opts.onHover,
+      plugins: { baseValue: base, legend: { display: false },
+        tooltip: { animation: false, filter: t => t.datasetIndex === 0, callbacks: { title: c => labelFmt(c[0].label), label: opts.tooltipLabel || (c => ` ${c.parsed.y}`) } },
+        zoom: tvZoom(labels.length) },
+      scales: { x: { min: i0, max: i1, grid: { display: false }, ticks: { color: tc.tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 7, callback: function (v) { return labelFmt(this.getLabelForValue(v)); } } },
+        y: { position: "right", min: yb.min, max: yb.max, grid: { color: tc.grid, drawBorder: false }, ticks: { color: tc.tick, maxTicksLimit: 5 } } } },
+    plugins: [crosshair, baseLine, lastValue, tvClip] });
+  tvAttach(id, true);
+}
+function barChart(id, pts, fmt, bucket, vp) {
+  fmt = fmt || fmtMonth; bucket = bucket || "month";
+  destroy(id); const el = document.getElementById(id); if (!el) return; const tc = themeColors();
+  const labels = pts.map(p => p.m), [i0, i1] = vpIdx(labels, vp);
+  charts[id] = new Chart(el, { type: "bar",
+    data: { labels, datasets: [{ data: pts.map(p => p.v), backgroundColor: tc.line, borderRadius: 5, borderSkipped: false, barPercentage: .7, categoryPercentage: .8 }] },
+    options: { animation: false, responsive: true, maintainAspectRatio: false, devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2), interaction: { mode: "index", intersect: false },
+      plugins: { legend: { display: false }, tooltip: { animation: false, callbacks: { title: c => (bucket === "week" ? "Week of " : "") + fmt(c[0].label), label: c => ` ${c.parsed.y} go-live${c.parsed.y === 1 ? "" : "s"}` } }, zoom: tvZoom(labels.length) },
+      scales: { x: { min: i0, max: i1, grid: { display: false }, ticks: { color: tc.tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 7, callback: function (v) { const l = this.getLabelForValue(v);
+          if (bucket === "month") { const [y, m] = String(l).split("-").map(Number); return MONTHS[m - 1] + " " + String(y).slice(2); }   // "Oct 25", matching the other charts
+          return fmt(l).replace(/, \d+$/, ""); } } },
+        y: { grid: { color: tc.grid, drawBorder: false }, ticks: { color: tc.tick, maxTicksLimit: 5, precision: 0 }, beginAtZero: true } } },
+    plugins: [crosshair] });
+  tvAttach(id, false);                                    // GO-LIVES: gestures + sync, but no controller overlay
+}
+
+// Crosshair: on the hovered chart it tracks the tooltip; on the other charts in the group it
+// mirrors the same date (nearest visible label), TradingView-style synchronized scrubbing.
 const crosshair = { id: "xhair", afterDraw(c) {
-  if (!c.tooltip || !c.tooltip._active || !c.tooltip._active.length) return;
-  const x = c.tooltip._active[0].element.x, { top, bottom } = c.chartArea, ctx = c.ctx;
+  const { top, bottom, left, right } = c.chartArea, ctx = c.ctx;
+  let x = null;
+  if (c.tooltip && c.tooltip._active && c.tooltip._active.length) {
+    x = c.tooltip._active[0].element.x;
+    // This chart is the scrub source: publish the hovered date, mirror on the others next frame.
+    const label = c.data.labels[c.tooltip._active[0].index];
+    if (XGROUP.includes(c.canvas.id) && (XSYNC.date !== label || XSYNC.src !== c.canvas.id)) {
+      XSYNC.date = label; XSYNC.src = c.canvas.id;
+      window.requestAnimationFrame(() => tvRedrawOthers(c.canvas.id));
+    }
+  }
+  else if (XSYNC.date != null && XSYNC.src !== c.canvas.id && XGROUP.includes(c.canvas.id) && c.scales.x) {
+    const times = lblTimes(c); if (!times.length) return;
+    const t = new Date(lblDate(XSYNC.date) + "T00:00:00Z").getTime();
+    let best = -1, bd = Infinity;
+    const lo = Math.max(0, Math.ceil(c.scales.x.min)), hi = Math.min(times.length - 1, Math.floor(c.scales.x.max));
+    for (let i = lo; i <= hi; i++) { const d = Math.abs(times[i] - t); if (d < bd) { bd = d; best = i; } }
+    if (best < 0 || bd > 45 * MS_PER_DAY) return;
+    x = c.scales.x.getPixelForValue(best);
+  }
+  if (x == null || x < left || x > right) return;
   ctx.save(); ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom);
   ctx.lineWidth = 1; ctx.setLineDash([4, 4]); ctx.strokeStyle = "#9aa2af"; ctx.stroke(); ctx.restore();
 } };
@@ -300,7 +464,7 @@ function windowTrend(vals) {                             // direction of the vis
 /* ---------- render ---------- */
 function render(store) {
   const dash = document.getElementById("dashboard"), empty = document.getElementById("empty");
-  if (currentView === "history") { dash.classList.add("hidden"); empty.classList.add("hidden"); if (!store.lastImport) return; }
+  if (currentView !== "dash") { dash.classList.add("hidden"); empty.classList.add("hidden"); if (!store.lastImport) return; }
   else if (!store.lastImport) { dash.classList.add("hidden"); empty.classList.remove("hidden"); return; }
   else { empty.classList.add("hidden"); dash.classList.remove("hidden"); }
 
@@ -335,13 +499,16 @@ function render(store) {
     if (inDayRange(d)) { const k = glKey(d); glBuckets[k] = (glBuckets[k] || 0) + c; glWinTotal += c; }
     else if (d >= pFrom && d <= pTo) glPrevTotal += c;
   });
-  if (glWinTotal) {                                       // zero-fill empty buckets so the bar axis represents elapsed time honestly
-    for (let d = new Date(viewRange.from + "T00:00:00Z"), glEnd = new Date(viewRange.to + "T00:00:00Z"); d <= glEnd; d = addDay(d)) {
-      const k = glKey(dstr(d)); if (!(k in glBuckets)) glBuckets[k] = 0;
+  const goliveDelta = priorHasData ? glWinTotal - glPrevTotal : null;
+  // Chart gets the FULL go-live history (bucketed + zero-filled) so panning can reach it; window math above is untouched.
+  const glAll = {}; Object.entries(m4c).forEach(([d, c]) => { const k = glKey(d); glAll[k] = (glAll[k] || 0) + c; });
+  const m4days = Object.keys(m4c).sort();
+  if (m4days.length) {
+    for (let d = new Date(m4days[0] + "T00:00:00Z"), glEnd = new Date(m4days[m4days.length - 1] + "T00:00:00Z"); d <= glEnd; d = addDay(d)) {
+      const k = glKey(dstr(d)); if (!(k in glAll)) glAll[k] = 0;
     }
   }
-  const glKeys = Object.keys(glBuckets).sort();
-  const goliveDelta = priorHasData ? glWinTotal - glPrevTotal : null;
+  const glKeys = Object.keys(glAll).sort();
 
   const m2c = m2Sel(store);                              // monthly averages (chart line + legacy fallback)
   const m2cropKeys = Object.keys(m2c).filter(inRange).sort();
@@ -382,7 +549,7 @@ function render(store) {
       const stale = pc.filter(p => p.days > 30).length, worst = pc.length ? pc[0].days : 0;
       return { label: "Live, pending close", icon: '<circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/>', val,
         pill: pill(delta, true),
-        foot: atLatest ? (val ? (stale ? `${stale} over 30d · longest ${worst}d since live` : "none stale") : "no one waiting on close-out")
+        foot: atLatest ? (val ? (stale ? `${stale} waiting 30+ days · longest ${worst}d since go-live` : "none waiting long") : "no one waiting on close-out")
                        : `at end of period · vs ${priorName}` }; })(),
   ];
   document.getElementById("kpis").innerHTML = kpis.map((k, i) => `<div class="card kpi" data-share="kpi-${i}">
@@ -394,20 +561,21 @@ function render(store) {
   document.querySelector("#sec-backlog h3").textContent = "OPEN PIPELINE TREND" + cohortLabel();
   document.getElementById("backlogPill").innerHTML = backlogDelta != null ? pill(backlogDelta, true) + ` <span style="font-size:12px;color:var(--hint)">vs ${priorName} (ended ${fmtDay(prevRow.date)})</span>` : "";
   const wt = windowTrend(win.map(bl));
+  const wtRange = `(${fmtDay(viewRange.from)} to ${fmtDay(viewRange.to)})`;   // explicit scope: the pill covers the SELECTED range, not the zoomed view
   document.getElementById("backlogTrend").innerHTML = !wt ? "" :
-    wt.kind === "up" ? `<span class="pill bad" style="font-size:13px;padding:3px 10px">&#9650; Rising over this period</span>` :
-    wt.kind === "down" ? `<span class="pill good" style="font-size:13px;padding:3px 10px">&#9660; Falling over this period</span>` :
-    `<span class="pill flat" style="font-size:13px;padding:3px 10px">&#9644; Flat over this period</span>`;
-  areaChart("backlogChart", win.map(r => ({ m: r.date, v: bl(r) })), 220, fmtDay);
+    wt.kind === "up" ? `<span class="pill bad" style="font-size:13px;padding:3px 10px">&#9650; Rising ${wtRange}</span>` :
+    wt.kind === "down" ? `<span class="pill good" style="font-size:13px;padding:3px 10px">&#9660; Falling ${wtRange}</span>` :
+    `<span class="pill flat" style="font-size:13px;padding:3px 10px">&#9644; Flat ${wtRange}</span>`;
+  areaChart("backlogChart", m3.map(r => ({ m: r.date, v: bl(r) })), 220, fmtDay, viewRange);   // full history; selected range = initial viewport
 
   // go-lives — bars bucketed to the window + prior-period comparison
   document.querySelector("#sec-golive h3").textContent = "GO-LIVES" + cohortLabel();
-  document.getElementById("goliveSub").textContent = `How many implementations went live — each bar is one ${glBucket}`;
+  document.getElementById("goliveSub").textContent = `How many implementations went live · each bar is one ${glBucket}`;
   document.getElementById("goliveNow").textContent = glWinTotal.toLocaleString();
   document.getElementById("golivePill").innerHTML = goliveDelta != null ? pill(goliveDelta, false) + ` <span style="font-size:12px;color:var(--hint)">vs ${priorName}</span>` : "";
-  barChart("goliveChart", glKeys.map(k => ({ m: k, v: glBuckets[k] })), glFmt, glBucket);
+  barChart("goliveChart", glKeys.map(k => ({ m: k, v: glAll[k] })), glFmt, glBucket, viewRange);
   document.getElementById("goliveCap").textContent = glWinTotal
-    ? `${glWinTotal} implementation${glWinTotal === 1 ? "" : "s"} went live in the selected period` + (goliveDelta != null ? ` — ${goliveDelta >= 0 ? goliveDelta + " more" : Math.abs(goliveDelta) + " fewer"} than the ${winLen} days before.` : ".")
+    ? `${glWinTotal} implementation${glWinTotal === 1 ? "" : "s"} went live in the selected period` + (goliveDelta != null ? ` · ${goliveDelta >= 0 ? goliveDelta + " more" : Math.abs(goliveDelta) + " fewer"} than the ${winLen} days before.` : ".")
     : "No go-lives in the selected period.";
   document.getElementById("breakdown").style.display = cohort === "all" ? "" : "none";
   const bdTot = cur.total || 1;
@@ -420,18 +588,21 @@ function render(store) {
     document.querySelector("#sec-speed h3").textContent = "PO TO GO-LIVE" + cohortLabel();
     document.getElementById("speedNow").textContent = speedTo;
     document.getElementById("speedPill").innerHTML = speedDelta != null ? pill(speedDelta, true) + ` <span style="font-size:12px;color:var(--hint)">vs ${priorName}</span>` : "";
-    if (Object.keys(m2dc).length) {                      // chart uses the same window + buckets as the headline, so they always agree
+    if (Object.keys(m2dc).length) {                      // full history; day-granularity by default so the baseline shows movement
+      const spBucket = vpUserSet ? glBucket : "day";
+      const spKey = d => spBucket === "day" ? d : glKey(d);
+      const spFmt = spBucket === "month" ? fmtMonth : fmtDay;
       const spB = {};
-      Object.entries(m2dc).forEach(([d, v]) => { if (!inDayRange(d)) return; const k = glKey(d); (spB[k] ||= { s: 0, n: 0 }); spB[k].s += v.s; spB[k].n += v.n; });
-      areaChart("speedChart", Object.keys(spB).sort().map(k => ({ m: k, v: Math.round(spB[k].s / spB[k].n) })), 110, glFmt);
-    } else areaChart("speedChart", m2cropKeys.map(k => ({ m: k, v: m2c[k] })), 110);   // legacy store: monthly line
-    document.getElementById("speedCap").textContent = `${speedTo} days average for go-lives in the selected period` +
-      (speedDelta != null ? (speedDelta < 0 ? ` — ${Math.abs(speedDelta)} faster than the ${priorName}.` : speedDelta > 0 ? ` — ${speedDelta} slower than the ${priorName}.` : ` — unchanged from the ${priorName}.`) : ".");
+      Object.entries(m2dc).forEach(([d, v]) => { const k = spKey(d); (spB[k] ||= { s: 0, n: 0 }); spB[k].s += v.s; spB[k].n += v.n; });
+      areaChart("speedChart", Object.keys(spB).sort().map(k => ({ m: k, v: Math.round(spB[k].s / spB[k].n) })), 110, spFmt, viewRange);
+    } else areaChart("speedChart", Object.keys(m2c).sort().map(k => ({ m: k, v: m2c[k] })), 110, fmtMonth, viewRange);   // legacy store: monthly line
+    document.getElementById("speedCap").textContent = `Go-lives in the selected period averaged ${speedTo} days from Purchase Order to Go-Live` +
+      (speedDelta != null ? (speedDelta < 0 ? ` · ${Math.abs(speedDelta)} days faster than the ${priorName}.` : speedDelta > 0 ? ` · ${speedDelta} days slower than the ${priorName}.` : ` · unchanged from the ${priorName}.`) : ".");
   } else {
     destroy("speedChart");
     document.getElementById("speedNow").textContent = "—";
     document.getElementById("speedPill").innerHTML = "";
-    document.getElementById("speedCap").textContent = "No completed implementations in the selected range.";
+    document.getElementById("speedCap").textContent = "No completed implementations in the selected period.";
   }
 
   // stage feature — TradingView watchlist + DAILY price chart, reconstructed from stage entered/exited dates
@@ -468,12 +639,16 @@ function render(store) {
 
   if (!selectedStage || !CONFIG.pipelineStages.includes(selectedStage)) selectedStage = rows[0] ? rows[0].st : null;
 
+  syncWlToggle();                                        // re-apply the collapse state on every render
   document.getElementById("stageList").innerHTML = rows.map(s =>
-    `<div class="wl-row${s.st === selectedStage ? " sel" : ""}" data-stage="${s.st}">
+    `<div class="wl-row${s.st === selectedStage ? " sel" : ""}" data-stage="${s.st}" role="button" tabindex="0" aria-pressed="${s.st === selectedStage}">
       <span class="wnm" title="${s.st}">${s.st}</span>
       <span class="wlast">${s.cur != null ? s.cur + "d" : "—"}</span>${trendBadge(s.t)}</div>`).join("");
-  document.querySelectorAll("#stageList .wl-row").forEach(el =>
-    el.addEventListener("click", () => { selectedStage = el.dataset.stage; render(loadStore()); }));
+  document.querySelectorAll("#stageList .wl-row").forEach(el => {
+    const pick = () => { selectedStage = el.dataset.stage; render(loadStore()); };
+    el.addEventListener("click", pick);
+    el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+  });
 
   const sel = rows.find(r => r.st === selectedStage) || rows[0];
   document.getElementById("cpName").textContent = sel ? sel.st : "—";
@@ -481,30 +656,19 @@ function render(store) {
   document.getElementById("cpBadge").innerHTML = sel ? trendBadge(sel.t) : "";
   destroy("stageBig");
   if (sel && sdDays.length) {
+    // Same baseline-chart implementation as OPEN PIPELINE TREND / PO TO GO-LIVE (areaChart), full daily history.
     const fullArr = stageArr(sel.st);
-    let wi = sdDays.map((d, i) => ({ d, i })).filter(o => inDayRange(o.d));   // crop chart to the selected window
-    // Wide windows switch to weekly closes so the steps stay broad and crisply 90° (narrow the range for daily detail)
-    const weekly = wi.length > 190;
-    if (weekly) wi = wi.filter((o, idx) => idx % 7 === 0 || idx === wi.length - 1);
-    document.getElementById("cpSub").textContent = (weekly ? "Weekly detail (narrow the date range for daily)" : "Daily detail") + " · hover to read · scroll to zoom · drag to pan · double-click to reset";
-    const wdays = wi.map(o => o.d), arr = wi.map(o => fullArr[o.i]);
-    const tc = themeColors(), el = document.getElementById("stageBig");
-    const { base, dataset } = baselineDataset(arr, { stepped: true, spanGaps: false, pointHoverRadius: 5, pointHoverBorderColor: "#fff", pointHoverBorderWidth: 2 });
-    charts["stageBig"] = new Chart(el, {
-      type: "line",
-      data: { labels: wdays, datasets: [dataset] },
-      options: { responsive: true, maintainAspectRatio: false, devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2), interaction: { mode: "index", intersect: false },
-        onHover: (e, els) => { const c = charts["stageBig"]; if (!c) return; const pr = document.getElementById("cpPrice"), ro = document.getElementById("cpReadout");
-          if (els && els.length) { const i = els[0].index, v = c.data.datasets[0].data[i], d = c.data.labels[i];
-            pr.textContent = v == null ? "—" : v + "d"; ro.textContent = " · " + fmtDay(d) + (v == null ? " · no open work" : " · " + v + " days"); } },
-        plugins: { baseValue: base, legend: { display: false }, tooltip: { callbacks: { title: c => fmtDay(c[0].label), label: c => c.parsed.y == null ? " no open work" : ` ${c.parsed.y} days` } },
-          zoom: { pan: { enabled: true, mode: "x" }, zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x" } } },
-        scales: { x: { grid: { display: false }, ticks: { color: tc.tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 8, callback: function (v) { return fmtDay(this.getLabelForValue(v)); } } },
-          y: { position: "right", grace: "12%", min: 0, grid: { color: tc.grid, drawBorder: false }, ticks: { color: tc.tick, maxTicksLimit: 5 } } } },
-      plugins: [crosshair, baseLine, lastValue],
+    document.getElementById("cpSub").textContent = "Daily detail · hover to read · scroll to zoom · drag to pan · double-click to reset";
+    areaChart("stageBig", sdDays.map((d, i) => ({ m: d, v: fullArr[i] })), 300, fmtDay, viewRange, {
+      tooltipLabel: c => c.parsed.y == null ? " no open work" : ` ${c.parsed.y} days`,
+      onHover: (e, els) => { const c = charts["stageBig"]; if (!c) return; const pr = document.getElementById("cpPrice"), ro = document.getElementById("cpReadout");
+        if (els && els.length) { const i = els[0].index, v = c.data.datasets[0].data[i], d = c.data.labels[i];
+          pr.textContent = v == null ? "—" : v + "d"; ro.textContent = " · " + fmtDay(d) + (v == null ? " · no open work" : " · " + v + " days"); } },
     });
-    el.onmouseleave = () => { document.getElementById("cpPrice").textContent = sel.cur != null ? sel.cur + "d" : "—"; document.getElementById("cpReadout").textContent = ""; };
-    el.ondblclick = () => { if (charts["stageBig"]) charts["stageBig"].resetZoom(); };
+    const el = document.getElementById("stageBig");
+    const syncLeave = el.onmouseleave;                    // compose: crosshair-sync clear + readout reset
+    el.onmouseleave = e => { if (syncLeave) syncLeave(e);
+      document.getElementById("cpPrice").textContent = sel.cur != null ? sel.cur + "d" : "—"; document.getElementById("cpReadout").textContent = ""; };
   }
 
   const up = rows.filter(s => s.t.kind === "up").length;
@@ -512,9 +676,9 @@ function render(store) {
   const flat = rows.filter(s => s.t.kind === "flat").length;
   document.getElementById("stageSummary").innerHTML = sdDays.length
     ? `<span><b style="color:var(--bad)">${up}</b> rising</span><span><b style="color:var(--good)">${down}</b> falling</span><span><b>${flat}</b> flat</span>`
-    : `<span>Needs stage date columns in the export</span>`;
+    : `<span>This needs the stage date columns · included when you export with "All properties"</span>`;
 
-  document.getElementById("subtitle").textContent = `${store.lastImport.records.toLocaleString()} records · ${fmtDay(viewRange.from)} – ${fmtDay(viewRange.to)}` + (store.demo ? " · SAMPLE DATA" : "");
+  document.getElementById("subtitle").textContent = `${store.lastImport.records.toLocaleString()} implementations · ${fmtDay(viewRange.from)} to ${fmtDay(viewRange.to)}` + (store.demo ? " · SAMPLE DATA" : "");
 }
 
 function syncRangeInputs() {                              // reflect viewRange into the day-level date inputs
@@ -530,6 +694,7 @@ function rangeFromInputs() {
 }
 function setTF(tf) {
   const store = loadStore(), b = dataDayBounds(store); if (!b) return;
+  vpUserSet = true;
   viewRange.to = b[1];
   if (tf === "all") viewRange.from = b[0];
   else {
@@ -549,14 +714,14 @@ function applyTheme(t) { document.documentElement.setAttribute("data-theme", t);
 
 /* ---------- share ---------- */
 const SHARE_CARDS = [
-  { id: "kpi-0", label: "Open implementations (backlog) — number" },
-  { id: "kpi-1", label: "CAREpoint open — number" },
-  { id: "kpi-2", label: "e-Bridge open — number" },
-  { id: "kpi-3", label: "Live, pending close — number" },
+  { id: "kpi-0", label: "Open implementations (backlog) · number" },
+  { id: "kpi-1", label: "CAREpoint open · number" },
+  { id: "kpi-2", label: "e-Bridge open · number" },
+  { id: "kpi-3", label: "Live, pending close · number" },
   { id: "sec-backlog", label: "Open pipeline trend (backlog)" },
+  { id: "sec-stage", label: "Time in stage" },
   { id: "sec-speed", label: "PO to go-live" },
   { id: "sec-golive", label: "Go-lives" },
-  { id: "sec-stage", label: "Time in stage" },
 ];
 function shareEl(id) { return id.startsWith("kpi-") ? document.querySelector(`[data-share="${id}"]`) : document.getElementById(id); }
 function shareSelection() { return [...document.querySelectorAll("#sharePick input:checked")].map(c => c.value); }
@@ -629,20 +794,24 @@ function fmtDateTime(iso) { const d = new Date(iso); return d.toLocaleDateString
 
 function showView(v) {
   currentView = v;
-  const hist = document.getElementById("history");
-  document.querySelectorAll(".nav a").forEach(x => x.classList.toggle("on", (v === "history") === (x.dataset.view === "history") && (v !== "history" ? x.dataset.goto === "kpis" : true)));
-  if (v === "history") { hist.classList.remove("hidden"); renderHistory(); render(loadStore()); }
-  else { hist.classList.add("hidden"); document.getElementById("histPreview").classList.add("hidden"); render(loadStore()); }
+  const hist = document.getElementById("history"), howto = document.getElementById("howto");
+  hist.classList.toggle("hidden", v !== "history");
+  howto.classList.toggle("hidden", v !== "howto");
+  document.querySelectorAll(".nav a").forEach(x =>
+    x.classList.toggle("on", v === "dash" ? x.dataset.goto === "kpis" : x.dataset.view === v));
+  if (v === "history") renderHistory();
+  if (v !== "history") document.getElementById("histPreview").classList.add("hidden");
+  render(loadStore());
 }
 function renderHistory() {
   const arr = loadImports();
   document.getElementById("histList").innerHTML = arr.length ? arr.map((e, i) => `
     <div class="hist-row">
-      <div class="hf" title="${e.fileName}">${e.fileName}${i === 0 ? ' <span class="pill flat" style="margin-left:6px">latest</span>' : ""}${e.older ? ' <span class="pill flat" style="margin-left:6px">older file — kept newer data</span>' : ""}</div>
+      <div class="hf" title="${e.fileName}">${e.fileName}${i === 0 ? ' <span class="pill flat" style="margin-left:6px">latest</span>' : ""}${e.older ? ' <span class="pill flat" style="margin-left:6px">older file · kept the newer data</span>' : ""}</div>
       <div class="hm hdate">${fmtDateTime(e.importedAt)}</div>
-      <div class="hm">counted as ${fmtMonth(e.snapMonth)} · ${e.records.toLocaleString()} records</div>
+      <div class="hm">counts as ${fmtMonth(e.snapMonth)} · ${e.records.toLocaleString()} implementations</div>
       <div class="ha">
-        <button class="btn" data-hview="${i}" ${e.csv ? "" : "disabled title='File no longer stored (freed for space) — metadata kept'"}>View</button>
+        <button class="btn" data-hview="${i}" ${e.csv ? "" : "disabled title='File removed to free space · details kept'"}>View</button>
         <button class="btn" data-hexp="${i}" ${e.csv ? "" : "disabled"}>Export</button>
       </div>
     </div>`).join("")
@@ -655,7 +824,7 @@ function previewImport(i) {
   const rows = parseCSV(e.csv), cols = rows.length ? Object.keys(rows[0]) : [];
   const shown = rows.slice(0, 50);
   document.getElementById("hpTitle").textContent = e.fileName;
-  document.getElementById("hpSub").textContent = `Imported ${fmtDateTime(e.importedAt)} · counted as ${fmtMonth(e.snapMonth)} · showing ${shown.length} of ${rows.length.toLocaleString()} rows`;
+  document.getElementById("hpSub").textContent = `Imported ${fmtDateTime(e.importedAt)} · counts as ${fmtMonth(e.snapMonth)} · showing ${shown.length} of ${rows.length.toLocaleString()} rows`;
   document.getElementById("hpTable").innerHTML = `<table class="htable"><thead><tr>${cols.map(c => `<th>${c}</th>`).join("")}</tr></thead>
     <tbody>${shown.map(r => `<tr>${cols.map(c => `<td>${(r[c] || "").slice(0, 60)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
   const pv = document.getElementById("histPreview");
@@ -677,8 +846,8 @@ function handleFile(file) { const r = new FileReader(); r.onload = e => {
     logImport({ fileName: file.name, importedAt: new Date().toISOString(), snapMonth: snap, records: records.length, older: !!store.lastImport.older, csv: e.target.result });
     showView("dash");
     toast(store.lastImport.older
-      ? `Recorded ${fmtMonth(snap)} stage snapshot. Kept newer backlog/speed data (${fmtMonth(store.asOfMonth)}).`
-      : `Imported ${records.length} records for ${fmtMonth(snap)}.`); } catch (err) { toast("Import problem: " + err.message, true); } };
+      ? `Saved the ${fmtMonth(snap)} stage snapshot. Kept the newer trends (${fmtMonth(store.asOfMonth)}).`
+      : `Imported ${records.length} implementations for ${fmtMonth(snap)}.`); } catch (err) { toast("Import problem: " + err.message, true); } };
   r.readAsText(file); }
 
 function init() {
@@ -714,7 +883,7 @@ function init() {
   shareAll.addEventListener("change", () => shareBoxes.forEach(b => b.checked = shareAll.checked));
   shareBoxes.forEach(b => b.addEventListener("change", () => shareAll.checked = shareBoxes.every(x => x.checked)));
 
-  document.getElementById("reset").addEventListener("click", () => { closeMenus(); if (confirm("Reset all data? This clears the stored history AND import log in this browser and cannot be undone. Back up first if unsure.")) { localStorage.removeItem(STORE_KEY); localStorage.removeItem(IMPORTS_KEY); localStorage.setItem("impl_trends_demo_off", "1"); location.reload(); } });
+  document.getElementById("reset").addEventListener("click", () => { closeMenus(); if (confirm("Reset all data? This clears the stored history and import log in this browser and can't be undone. Back up first if unsure.")) { localStorage.removeItem(STORE_KEY); localStorage.removeItem(IMPORTS_KEY); localStorage.setItem("impl_trends_demo_off", "1"); location.reload(); } });
   document.getElementById("backup").addEventListener("click", () => { closeMenus();
     const blob = new Blob([localStorage.getItem(STORE_KEY) || JSON.stringify(blankStore())], { type: "application/json" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "implementation-trends-history.json"; a.click(); });
@@ -724,10 +893,11 @@ function init() {
     r.onload = ev => { try { const s = JSON.parse(ev.target.result); saveStore(s); viewRange = { from: null, to: null }; render(s); toast("History restored."); } catch { toast("Not a valid history file.", true); } }; r.readAsText(f); hf.value = ""; });
 
   ["fromDate", "toDate"].forEach(id =>
-    document.getElementById(id).addEventListener("change", () => { const r = rangeFromInputs(); if (!r) return; viewRange.from = r.from; viewRange.to = r.to; document.querySelectorAll("#tfPresets button").forEach(x => x.classList.remove("on")); render(loadStore()); }));
+    document.getElementById(id).addEventListener("change", () => { const r = rangeFromInputs(); if (!r) return; vpUserSet = true; viewRange.from = r.from; viewRange.to = r.to; document.querySelectorAll("#tfPresets button").forEach(x => x.classList.remove("on")); render(loadStore()); }));
   document.querySelectorAll("#tfPresets button").forEach(b => b.addEventListener("click", () => setTF(b.dataset.tf)));
   document.getElementById("todayBtn").addEventListener("click", () => {
     const n = new Date(); const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+    vpUserSet = true;
     viewRange.to = today; if (viewRange.from && viewRange.from > today) viewRange.from = today;
     document.querySelectorAll("#tfPresets button").forEach(x => x.classList.remove("on"));
     render(loadStore());
@@ -738,12 +908,26 @@ function init() {
     render(loadStore());
   }));
 
-  document.querySelectorAll(".nav a").forEach(a => a.addEventListener("click", () => {
-    document.querySelectorAll(".nav a").forEach(x => x.classList.remove("on")); a.classList.add("on");
-    if (a.dataset.view === "history") { showView("history"); return; }
-    if (currentView === "history") showView("dash");
-    const el = document.getElementById(a.dataset.goto); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); }));
-  document.getElementById("histBack").addEventListener("click", () => { showView("dash"); document.querySelectorAll(".nav a").forEach(x => x.classList.toggle("on", x.dataset.goto === "kpis")); });
+  document.querySelectorAll(".nav a").forEach(a => {
+    const go = () => {
+      document.querySelectorAll(".nav a").forEach(x => x.classList.remove("on")); a.classList.add("on");
+      if (a.dataset.view) { showView(a.dataset.view); return; }
+      if (currentView !== "dash") showView("dash");
+      const el = document.getElementById(a.dataset.goto); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    a.addEventListener("click", go);
+    a.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } });   // href-less anchors don't activate natively
+  });
+  document.getElementById("histBack").addEventListener("click", () => showView("dash"));
+  document.getElementById("howtoBack").addEventListener("click", () => showView("dash"));
+
+  // Collapsible stage selector (TradingView watchlist behavior) — chart reflows to full card width.
+  // Chart.js's ResizeObserver tracks the animated column; one final resize lands after the transition.
+  document.getElementById("wlToggle").addEventListener("click", () => {
+    wlCollapsed = !wlCollapsed;
+    syncWlToggle();
+    setTimeout(() => { const c = charts["stageBig"]; if (c) { c.resize(); tvRebase(c); } }, 320);
+  });
   document.getElementById("hpClose").addEventListener("click", () => document.getElementById("histPreview").classList.add("hidden"));
   document.getElementById("hpExport").addEventListener("click", () => { const i = +document.getElementById("histPreview").dataset.idx; exportImport(i); });
 
