@@ -186,6 +186,9 @@ function applyImport(store, records, snap) {
     store.pendingDaily = pendingDaily(records);
     store.asOfMonth = snap;
   }
+  const unk = {};
+  for (const r of records) if (r.stage && !CONFIG.pipelineStages.includes(r.stage)) unk[r.stage] = (unk[r.stage] || 0) + 1;
+  store.unknownStages = Object.entries(unk).map(([name, count]) => ({ name, count }));
   store.lastImport = { month: snap, records: records.length, when: new Date().toISOString(), older: !!older };
   store.demo = false;
   viewRange = { from: null, to: null }; return store; }
@@ -755,6 +758,10 @@ function render(store) {
     + (dataThrough ? ` · data through ${fmtDay(dataThrough)}` : "") + (importedOn ? ` · imported ${fmtDay(importedOn)}` : "")
     + (store.demo ? " · SAMPLE DATA" : "");
   const dB = document.getElementById("demoBanner"); if (dB) dB.classList.toggle("hidden", !store.demo);
+  const sW = document.getElementById("stageWarn");
+  if (sW) { const u = store.unknownStages || [];
+    sW.classList.toggle("hidden", !u.length);
+    if (u.length) sW.textContent = u.map(x => `Unrecognized stage "${x.name}" · ${x.count} implementation${x.count === 1 ? "" : "s"} not shown in Time in Stage`).join(" · ") + " · report this so the stage can be added"; }
 }
 
 function syncRangeInputs() {                              // reflect viewRange into the day-level date inputs
@@ -899,17 +906,23 @@ function renderHistory() {
   const arr = loadImports();
   document.getElementById("histList").innerHTML = arr.length ? arr.map((e, i) => `
     <div class="hist-row">
-      <div class="hf" title="${e.fileName}">${e.fileName}${i === 0 ? ' <span class="pill flat" style="margin-left:6px">latest</span>' : ""}${e.older ? ' <span class="pill flat" style="margin-left:6px">older file · kept the newer data</span>' : ""}</div>
+      <div class="hf" title="${e.fileName}">${e.fileName}${i === 0 ? ' <span class="pill flat" style="margin-left:6px">latest</span>' : ""}${e.older ? ' <span class="pill flat" style="margin-left:6px">older file · kept the newer data</span>' : ""}${/\(demo\)/.test(e.fileName) ? ' <span class="pill flat" style="margin-left:6px">sample data · not an import</span>' : ""}${i > 0 && arr.slice(0, i).some(x => x.snapMonth === e.snapMonth) ? ' <span class="pill flat" style="margin-left:6px">replaced</span>' : ""}</div>
       <div class="hm hdate">${fmtDateTime(e.importedAt)}</div>
       <div class="hm">counts as ${fmtMonth(e.snapMonth)} · ${e.records.toLocaleString()} implementations</div>
       <div class="ha">
         <button class="btn" data-hview="${i}" ${e.csv ? "" : "disabled title='File removed to free space · details kept'"}>View</button>
         <button class="btn" data-hexp="${i}" ${e.csv ? "" : "disabled"}>Export</button>
+        <button class="btn" data-hreimp="${i}" ${e.csv ? "" : "disabled"} title="Rebuild the dashboard from this file">Re-import</button>
       </div>
     </div>`).join("")
     : `<div style="color:var(--hint);padding:26px 0;text-align:center">No imports yet. Import a HubSpot export from the Dashboard and it will be logged here.</div>`;
   document.querySelectorAll("[data-hview]").forEach(b => b.addEventListener("click", () => previewImport(+b.dataset.hview)));
   document.querySelectorAll("[data-hexp]").forEach(b => b.addEventListener("click", () => exportImport(+b.dataset.hexp)));
+  document.querySelectorAll("[data-hreimp]").forEach(b => b.addEventListener("click", () => {
+    const e = loadImports()[+b.dataset.hreimp]; if (!e || !e.csv) return;
+    if (!confirm(`Re-import ${e.fileName}? The dashboard rebuilds from that file.`)) return;
+    handleFile(new File([e.csv], e.fileName.replace(" (demo)", ""), { type: "text/csv" }));
+  }));
 }
 function previewImport(i) {
   const e = loadImports()[i]; if (!e || !e.csv) return;
@@ -932,14 +945,38 @@ function exportImport(i) {
 /* ---------- events ---------- */
 function toast(msg, err) { const t = document.getElementById("toast"); t.textContent = msg; t.className = "toast show" + (err ? " err" : ""); setTimeout(() => t.className = "toast", 3200); }
 function closeMenus() { document.querySelectorAll("details.menu[open]").forEach(d => d.open = false); }
+function noteShow(msg, kind) { const n = document.getElementById("importNote"); if (!n) return;
+  n.className = "inote" + (kind === "err" ? " err" : ""); document.getElementById("importNoteMsg").innerHTML = msg; }
+function noteHide() { const n = document.getElementById("importNote"); if (n) n.className = "inote hidden"; }
 function handleFile(file) { const r = new FileReader(); r.onload = e => {
   try { const records = normalize(parseCSV(e.target.result)); if (!records.length) throw new Error("No records found.");
-    const snap = snapshotMonthFromName(file.name); const store = applyImport(loadStore(), records, snap); saveStore(store);
+    const prev = loadStore().lastImport;
+    if (prev && prev.records && Math.abs(records.length - prev.records) / prev.records > 0.2) {
+      if (!confirm(`This file has ${records.length} implementations; the last import had ${prev.records}. A HubSpot filter may have been left on. Import anyway?`)) return;
+    }
+    const nameM = (file.name || "").match(CONFIG.filenameDateRegex);
+    const snap = nameM ? `${nameM[1]}-${nameM[2]}` : monthKey(new Date());
+    const store = applyImport(loadStore(), records, snap); saveStore(store);
     logImport({ fileName: file.name, importedAt: new Date().toISOString(), snapMonth: snap, records: records.length, older: !!store.lastImport.older, csv: e.target.result });
+    try { localStorage.setItem(TF_KEY, "lastm"); } catch (e2) { }
     showView("dash");
+    const diff = prev && prev.records ? records.length - prev.records : null;
     toast(store.lastImport.older
       ? `Saved the ${fmtMonth(snap)} stage snapshot. Kept the newer trends (${fmtMonth(store.asOfMonth)}).`
-      : `Imported ${records.length} implementations for ${fmtMonth(snap)}.`); } catch (err) { toast("Import problem: " + err.message, true); } };
+      : `Imported ${records.length} implementations for ${fmtMonth(snap)}` + (diff != null ? ` · ${diff >= 0 ? "+" + diff : diff} vs last import` : ""));
+    noteHide();
+    const nags = [];
+    if (!nameM) nags.push(`No date in the file name, so this counts as ${fmtMonth(snap)} · rename to implementations_YYYY-MM-DD.csv to control the month`);
+    const lb = localStorage.getItem("impl_trends_backup_at");
+    if (prev && (!lb || lb < (prev.when || ""))) nags.push(`Last backup: ${lb ? fmtDay(lb.slice(0, 10)) : "never"} · this browser holds the only copy of your history <button class="btn" id="noteBackup" style="margin-left:8px">Back up now</button>`);
+    if (nags.length) noteShow(nags.join("<br>"));
+  } catch (err) {
+    const missing = /Missing column/.test(err.message || "");
+    noteShow((missing
+      ? "That file is missing the Implementation columns, so it may be the wrong HubSpot export. "
+      : "The import failed: " + (err.message || err) + ". ")
+      + "Your existing data is untouched · How to Use has the export steps", "err");
+  } };
   r.readAsText(file); }
 
 function init() {
@@ -952,6 +989,10 @@ function init() {
     document.querySelectorAll("details.menu[open]").forEach(d => { if (!d.contains(e.target)) d.open = false; });
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenus(); });
+  document.addEventListener("click", e => {
+    if (e.target && e.target.id === "importNoteX") noteHide();
+    if (e.target && e.target.id === "noteBackup") document.getElementById("backup").click();
+  });
 
   // Day-level date range inputs, populated before the first import.
   syncRangeInputs();
@@ -961,7 +1002,11 @@ function init() {
   file.addEventListener("change", e => { if (e.target.files[0]) handleFile(e.target.files[0]); file.value = ""; });
   const main = document.querySelector(".main");
   ["dragover", "dragenter"].forEach(ev => main.addEventListener(ev, e => e.preventDefault()));
-  main.addEventListener("drop", e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f); });
+  main.addEventListener("drop", e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (!f) return;
+    const n = (f.name || "").toLowerCase();
+    if (n.endsWith(".json")) { noteShow("That looks like a backup file · use the Data menu (⋯) → Restore backup for .json files", "err"); return; }
+    if (!n.endsWith(".csv")) { noteShow("That file is not a CSV · in HubSpot pick the CSV export format, not Excel", "err"); return; }
+    handleFile(f); });
 
   document.getElementById("themeBtn").addEventListener("click", () => { applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark"); render(loadStore()); });
   document.getElementById("pngBtn").addEventListener("click", () => { closeMenus(); sharePNG(); });
@@ -977,12 +1022,23 @@ function init() {
 
   document.getElementById("reset").addEventListener("click", () => { closeMenus(); if (confirm("Reset all data? This clears the stored history and import log in this browser and can't be undone. Back up first if unsure.")) { localStorage.removeItem(STORE_KEY); localStorage.removeItem(IMPORTS_KEY); localStorage.setItem("impl_trends_demo_off", "1"); location.reload(); } });
   document.getElementById("backup").addEventListener("click", () => { closeMenus();
-    const blob = new Blob([localStorage.getItem(STORE_KEY) || JSON.stringify(blankStore())], { type: "application/json" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "implementation-trends-history.json"; a.click(); });
+    const payload = { v: 2, savedAt: new Date().toISOString(), store: loadStore(), imports: loadImports() };
+    const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "implementation-trends-history.json"; a.click();
+    try { localStorage.setItem("impl_trends_backup_at", payload.savedAt); } catch (e) { }
+    noteHide(); });
   const hf = document.getElementById("histFile");
   document.getElementById("restore").addEventListener("click", () => { closeMenus(); hf.click(); });
   hf.addEventListener("change", e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader();
-    r.onload = ev => { try { const s = JSON.parse(ev.target.result); saveStore(s); viewRange = { from: null, to: null }; render(s); toast("History restored."); } catch { toast("Not a valid history file.", true); } }; r.readAsText(f); hf.value = ""; });
+    r.onload = ev => { try {
+      const j = JSON.parse(ev.target.result);
+      const s = (j && j.v === 2 && j.store) ? j.store : j;                     // v2 wrapper or legacy raw store
+      if (!s || typeof s !== "object" || Array.isArray(s) || !("m1" in s) || !("lastImport" in s)) { toast("Not a valid history file.", true); return; }
+      try { const cur = localStorage.getItem(STORE_KEY); if (cur) localStorage.setItem("impl_trends_prev_store", cur); } catch (e2) { }
+      saveStore(s);
+      if (j && j.v === 2 && Array.isArray(j.imports)) saveImports(j.imports);
+      viewRange = { from: null, to: null }; render(s); toast("History restored.");
+    } catch (err) { toast(err && err.name === "QuotaExceededError" ? "That backup is too large for this browser's storage." : "Not a valid history file.", true); } }; r.readAsText(f); hf.value = ""; });
 
   ["fromDate", "toDate"].forEach(id =>
     document.getElementById(id).addEventListener("change", () => { const r = rangeFromInputs(); if (!r) return; vpUserSet = true; viewRange.from = r.from; viewRange.to = r.to; try { localStorage.setItem(TF_KEY, "custom:" + r.from + ":" + r.to); } catch (e) { } document.querySelectorAll("#tfPresets button").forEach(x => x.classList.remove("on")); render(loadStore()); }));
