@@ -164,8 +164,10 @@
   .inote button#importNoteX{background:none;border:none;font-size:16px;cursor:pointer;color:var(--hint)}
   .pill.worse{text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:1px}
   #stageInsights{display:flex;flex-direction:column;gap:5px;margin-top:6px}
-  .ins-card{display:flex;align-items:baseline;gap:9px;width:100%;text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:8px 12px;font-size:12.5px;line-height:1.5;color:var(--muted);cursor:pointer;font-family:inherit}
-  .ins-card b{color:var(--ink);font-weight:600;white-space:nowrap}
+  .ins-card{display:grid;grid-template-columns:14px 218px 1fr auto;align-items:baseline;gap:9px;width:100%;text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:8px 12px;font-size:12.5px;line-height:1.5;color:var(--muted);cursor:pointer;font-family:inherit}
+  .ins-card.flat{display:flex}
+  .ins-card b{color:var(--ink);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .ins-hdr{display:grid;grid-template-columns:14px 218px 1fr;gap:9px;padding:2px 12px 4px;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--hint);font-weight:600}
   .ins-card:hover{background:var(--tile)}
   .ins-card:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
   .ins-card.flat{cursor:default}
@@ -370,6 +372,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>
