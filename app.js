@@ -236,6 +236,7 @@ function lblTimes(c) { return c.$lblTimes || (c.$lblTimes = (c.data.labels || []
 // TradingView-style last-value marker: dotted line at the latest value, end dot, and a price-style label on the right axis
 const lastValue = { id: "lastval", afterDatasetsDraw(c) {
   const ds = c.data.datasets[0]; if (!ds || c.config.type !== "line") return;
+  if ((c.options.plugins || {}).lastValOff) return;
   let i = ds.data.length - 1; while (i >= 0 && ds.data[i] == null) i--;
   if (i < 0) return;
   const pt = c.getDatasetMeta(0).data[i]; if (!pt) return;
@@ -357,6 +358,23 @@ function tvZoom(n) { return {
   pan: { enabled: true, mode: "x", onPanComplete: ({ chart }) => tvRebase(chart) },
   zoom: { wheel: { enabled: true, modifierKey: MODK }, pinch: { enabled: true }, mode: "x", onZoomComplete: ({ chart }) => tvRebase(chart) },
 }; }
+const avgLine = { id: "avgline", afterDatasetsDraw(c) {
+  const v = (c.options.plugins || {}).avgLineValue; if (v == null) return;
+  const y = c.scales.y.getPixelForValue(v);
+  const { left, right, top, bottom } = c.chartArea, ctx = c.ctx;
+  if (y < top || y > bottom) return;
+  const col = "#5b8def";
+  ctx.save();
+  ctx.setLineDash([5, 4]); ctx.strokeStyle = col; ctx.globalAlpha = .8; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+  ctx.setLineDash([]); ctx.globalAlpha = 1; ctx.fillStyle = col;
+  const txt = "avg " + v + "d"; ctx.font = "600 10.5px Inter, system-ui, sans-serif";
+  const w = ctx.measureText(txt).width + 10, h = 17;
+  const px = right - w - 6;                               // inside the plot, hugging the right edge — never clips
+  ctx.beginPath(); ctx.roundRect(px, y - h / 2, w, h, 4); ctx.fill();
+  ctx.fillStyle = "#fff"; ctx.textBaseline = "middle"; ctx.fillText(txt, px + 5, y + .5);
+  ctx.restore();
+} };
 const XGROUP = ["backlogChart", "speedChart", "goliveChart", "stageBig"];
 const XSYNC = { date: null, src: null };
 function tvRedrawOthers(srcId) { XGROUP.forEach(id => { if (id !== srcId && charts[id]) charts[id].draw(); }); }
@@ -415,7 +433,7 @@ function areaChart(id, pts, height, labelFmt, vp, opts) { // the ONE baseline-ch
         zoom: tvZoom(labels.length) },
       scales: { x: { min: i0, max: i1, grid: { display: false }, ticks: { color: tc.tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 7, callback: function (v) { return labelFmt(this.getLabelForValue(v)); } } },
         y: { position: "right", min: yb.min, max: yb.max, grid: { color: tc.grid, drawBorder: false }, ticks: { color: tc.tick, maxTicksLimit: 5 } } } },
-    plugins: [crosshair, baseLine, lastValue, tvClip] });
+    plugins: [crosshair, baseLine, lastValue, avgLine, tvClip] });
   tvAttach(id, true);
   chartAria(id, pts);
 }
@@ -717,7 +735,7 @@ function render(store) {
       areaChart("speedChart", spPts, 110, spFmt, viewRange, {
         tooltipLabel: c => ` ${c.parsed.y} days · avg of ${spPts[c.dataIndex] ? spPts[c.dataIndex].n : "?"} go-live${spPts[c.dataIndex] && spPts[c.dataIndex].n === 1 ? "" : "s"}`,
       });
-      const spC = charts["speedChart"]; if (spC) { spC.options.plugins.lastValPrefix = "latest "; spC.update("none"); }
+      const spC = charts["speedChart"]; if (spC) { spC.options.plugins.lastValOff = true; spC.options.plugins.avgLineValue = speedTo; spC.update("none"); }
     } else areaChart("speedChart", Object.keys(m2c).sort().map(k => ({ m: k, v: m2c[k] })), 110, fmtMonth, viewRange);   // legacy store: monthly line
     document.getElementById("speedCap").textContent = `Go-lives in the selected period averaged ${speedTo} days from Purchase Order to Go-Live` + (spN ? ` across ${spN} go-lives` : "") +
       (speedDelta != null ? (speedDelta < 0 ? ` · ${Math.abs(speedDelta)} days faster than the ${priorName}.` : speedDelta > 0 ? ` · ${speedDelta} days slower than the ${priorName}.` : ` · unchanged from the ${priorName}.`) : ".");
