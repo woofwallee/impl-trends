@@ -26,7 +26,7 @@ const CONFIG = {
     "On-hold", "Go-Live Scheduled", "Implementation Live/Complete",
   ],
 };
-const MS_PER_DAY = 86400000, STORE_KEY = "impl_trends_history_v1", THEME_KEY = "impl_trends_theme";
+const MS_PER_DAY = 86400000, STORE_KEY = "impl_trends_history_v1", THEME_KEY = "impl_trends_theme", TF_KEY = "impl_trends_tf";
 const CP = "#2f6ded", EB = "#ea8a2f", GOOD = "#15803d", BAD = "#dc2626", GRAY = "#9aa2af", BLUE = "#2f6ded";
 // TradingView Baseline palette, mapped to BUSINESS health (all baseline charts here are lower-is-better):
 // above the baseline = worsening (red), below = improving (green). Gray = no baseline / no change.
@@ -306,14 +306,16 @@ function vpIdx(labels, vp) {                              // [i0,i1] viewport in
   return [i0, i1];
 }
 let vpUserSet = false;                                    // becomes true when the user picks a preset/date range
-function chartVp(labels, vp) {                            // default: last 2 weeks in days (movement visible); user selection overrides
-  if (vpUserSet) return vpIdx(labels, vp);
-  const n = labels.length; if (!n) return [0, 0];
-  const last = lblDate(labels[n - 1]);
-  const cut = dstr(new Date(new Date(last + "T00:00:00Z").getTime() - 13 * MS_PER_DAY));
-  let i0 = labels.findIndex(l => lblDate(l) >= cut);
-  if (i0 < 0 || i0 >= n - 1) i0 = Math.max(0, n - 2);     // always at least 2 points visible
-  return [i0, n - 1];
+function chartVp(labels, vp) {                            // viewport = the selected range, always: what the pill judges is what the chart shows
+  return vpIdx(labels, vp);
+}
+function lastMonthRange(b) {                              // last full calendar month ending on or before the last data day
+  const t = new Date(b[1] + "T00:00:00Z");
+  let y = t.getUTCFullYear(), m = t.getUTCMonth();
+  const lastOfM = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  if (t.getUTCDate() !== lastOfM) { m -= 1; if (m < 0) { m = 11; y -= 1; } }
+  const from = dstr(new Date(Date.UTC(y, m, 1))), to = dstr(new Date(Date.UTC(y, m + 1, 0)));
+  return { from: from < b[0] ? b[0] : from, to: to > b[1] ? b[1] : to };
 }
 function yBounds(vals, i0, i1, base) {                    // TV-style: y axis fits the visible data (+ the baseline)
   let lo = Infinity, hi = -Infinity;
@@ -532,7 +534,11 @@ function render(store) {
   else { empty.classList.add("hidden"); dash.classList.remove("hidden"); }
 
   const bounds = dataDayBounds(store);
-  if (bounds) { if (!viewRange.from) viewRange.from = bounds[0]; if (!viewRange.to) viewRange.to = bounds[1]; }
+  if (bounds && (!viewRange.from || !viewRange.to)) {
+    const lm = lastMonthRange(bounds);
+    viewRange.from = viewRange.from || lm.from; viewRange.to = viewRange.to || lm.to;
+    document.querySelectorAll("#tfPresets button").forEach(x => x.classList.toggle("on", x.dataset.tf === "lastm"));
+  }
   syncRangeInputs();
   const [pFrom, pTo] = priorWindow();                     // equal-length window immediately before the selection
   const priorHasData = bounds && pTo >= bounds[0];         // suppress comparisons when the prior window predates the data
@@ -760,13 +766,17 @@ function rangeFromInputs() {
 function setTF(tf) {
   const store = loadStore(), b = dataDayBounds(store); if (!b) return;
   vpUserSet = true;
-  viewRange.to = b[1];
-  if (tf === "all") viewRange.from = b[0];
+  if (tf === "lastm") { const lm = lastMonthRange(b); viewRange.from = lm.from; viewRange.to = lm.to; }
   else {
-    const n = parseInt(tf, 10), t = new Date(b[1] + "T00:00:00Z");
-    const f = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() - n, t.getUTCDate() + 1));
-    viewRange.from = dstr(f) < b[0] ? b[0] : dstr(f);
+    viewRange.to = b[1];
+    if (tf === "all") viewRange.from = b[0];
+    else {
+      const n = parseInt(tf, 10), t = new Date(b[1] + "T00:00:00Z");
+      const f = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() - n, t.getUTCDate() + 1));
+      viewRange.from = dstr(f) < b[0] ? b[0] : dstr(f);
+    }
   }
+  try { localStorage.setItem(TF_KEY, tf); } catch (e) { }
   document.querySelectorAll("#tfPresets button").forEach(x => x.classList.toggle("on", x.dataset.tf === tf));
   render(store);
 }
@@ -958,10 +968,11 @@ function init() {
     r.onload = ev => { try { const s = JSON.parse(ev.target.result); saveStore(s); viewRange = { from: null, to: null }; render(s); toast("History restored."); } catch { toast("Not a valid history file.", true); } }; r.readAsText(f); hf.value = ""; });
 
   ["fromDate", "toDate"].forEach(id =>
-    document.getElementById(id).addEventListener("change", () => { const r = rangeFromInputs(); if (!r) return; vpUserSet = true; viewRange.from = r.from; viewRange.to = r.to; document.querySelectorAll("#tfPresets button").forEach(x => x.classList.remove("on")); render(loadStore()); }));
+    document.getElementById(id).addEventListener("change", () => { const r = rangeFromInputs(); if (!r) return; vpUserSet = true; viewRange.from = r.from; viewRange.to = r.to; try { localStorage.setItem(TF_KEY, "custom:" + r.from + ":" + r.to); } catch (e) { } document.querySelectorAll("#tfPresets button").forEach(x => x.classList.remove("on")); render(loadStore()); }));
   document.querySelectorAll("#tfPresets button").forEach(b => b.addEventListener("click", () => setTF(b.dataset.tf)));
   document.getElementById("todayBtn").addEventListener("click", () => {
-    const n = new Date(); const today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+    const n = new Date(); let today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+    const bT = dataDayBounds(loadStore()); if (bT && today > bT[1]) today = bT[1];   // never label a range past the data
     vpUserSet = true;
     viewRange.to = today; if (viewRange.from && viewRange.from > today) viewRange.from = today;
     document.querySelectorAll("#tfPresets button").forEach(x => x.classList.remove("on"));
@@ -1016,7 +1027,15 @@ function init() {
     } catch (e) { } }
   }
   if (!s0.lastImport && !localStorage.getItem("impl_trends_demo_off")) loadDemo();
-  else render(s0);
+  else {
+    const saved = localStorage.getItem(TF_KEY), b = dataDayBounds(s0);
+    if (saved && b && saved.startsWith("custom:")) {
+      const [, f, t] = saved.split(":");
+      if (f >= b[0] && t <= b[1]) { vpUserSet = true; viewRange.from = f; viewRange.to = t; }
+      render(s0);
+    } else if (saved && b) setTF(saved);
+    else render(s0);
+  }
 }
 function loadDemo() {                                     // bundled sample so the demo experience works out of the box
   fetch("sample-data.csv").then(r => { if (!r.ok) throw 0; return r.text(); }).then(text => {
