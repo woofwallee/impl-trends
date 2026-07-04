@@ -3,401 +3,87 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Implementation Trends</title>
-<script src="vendor/chart.umd.min.js"></script>
-<script src="vendor/hammer.min.js"></script>
-<script src="vendor/chartjs-plugin-zoom.min.js"></script>
-<script src="vendor/html2canvas.min.js"></script>
+<title>Implementation Health</title>
 <style>
   :root{
-    --bg:#eef1f5; --panel:#ffffff; --ink:#1a1f2b; --muted:#6b7280; --hint:#77808f;
-    --line:#eaecef; --line2:#f1f3f5; --tile:#f5f7f9;
-    --blue:#2f6ded; --blue-soft:#eaf1fe;
-    --good:#15803d; --good-bg:#e7f6ec; --bad:#dc2626; --bad-bg:#fdecec;
-    --cp:#2f6ded; --eb:#ea8a2f; --radius:16px; --grid:#eef1f5; --track:#e5e9ef;
+    --bg:#f4f6f9; --panel:#ffffff; --ink:#111826; --muted:#5b6675; --line:#e4e8ef;
+    --accent:#2f6ded; --bad:#dc2626; --warn:#c2761a; --good:#15803d; --ok:#6b7280; --mute:#9aa2af;
+    --badbg:#fdecec; --warnbg:#fdf3e6; --goodbg:#e9f6ee; --okbg:#f1f3f6; --mutebg:#f1f3f6;
+    --shadow:0 1px 2px rgba(17,24,38,.06),0 1px 8px rgba(17,24,38,.04);
   }
-  html[data-theme="dark"]{
-    --bg:#0e1320; --panel:#161d2b; --ink:#e8edf5; --muted:#9aa6b8; --hint:#8b97a8;
-    --line:#232c3d; --line2:#1b2331; --tile:#1b2331; --blue:#5b8cf5; --blue-soft:#1b2740;
-    --good:#46d38a; --good-bg:#12312300; --good-bg:#153524; --bad:#f87171; --bad-bg:#3a1a1c;
-    --cp:#5b8cf5; --eb:#f0a24e; --grid:#222a39; --track:#2a3446;
+  :root[data-theme="dark"]{
+    --bg:#0f141b; --panel:#161d27; --ink:#e8edf4; --muted:#9aa6b6; --line:#26303d;
+    --accent:#5b8bff; --bad:#ff6b6b; --warn:#e0a24a; --good:#43c07a; --ok:#8b95a4; --mute:#6b7482;
+    --badbg:#2a1a1c; --warnbg:#2a2214; --goodbg:#132420; --okbg:#1b232e; --mutebg:#1b232e;
+    --shadow:0 1px 2px rgba(0,0,0,.3);
   }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+    --bg:#0f141b; --panel:#161d27; --ink:#e8edf4; --muted:#9aa6b6; --line:#26303d;
+    --accent:#5b8bff; --bad:#ff6b6b; --warn:#e0a24a; --good:#43c07a; --ok:#8b95a4; --mute:#6b7482;
+    --badbg:#2a1a1c; --warnbg:#2a2214; --goodbg:#132420; --okbg:#1b232e; --mutebg:#1b232e;
+    --shadow:0 1px 2px rgba(0,0,0,.3);
+  }}
   *{box-sizing:border-box}
-  html,body{margin:0}
-  body{background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px}
-  .app{display:flex;min-height:100vh}
-  svg.ic{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
-
-  .side{width:242px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:20px 14px;position:sticky;top:0;height:100vh}
-  .brand{display:flex;align-items:center;gap:10px;padding:6px 8px 18px}
-  .brand .mk{width:30px;height:30px;border-radius:9px;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
-  .brand b{font-size:15px;font-weight:600;display:block;line-height:1.1}
-  .brand span{font-size:11px;color:var(--hint)}
-  .nav a{display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:10px;color:var(--muted);text-decoration:none;font-weight:500;margin-bottom:2px;cursor:pointer}
-  .nav a:hover{background:var(--tile);color:var(--ink)}
-  .nav a:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
-  .nav a.on{background:var(--blue-soft);color:var(--blue)}
-  .side .grow{flex:1}
-  .privacy{background:var(--tile);border-radius:12px;padding:12px 13px;font-size:11.5px;color:var(--muted);line-height:1.45}
-  .privacy b{color:var(--ink);display:block;margin-bottom:3px}
-
-  .main{flex:1;min-width:0;padding:22px 26px 60px}
-  .top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:18px}
-  .top h1{font-size:22px;font-weight:600;margin:0}
-  .top .sub{font-size:12.5px;color:var(--hint);margin-top:2px}
-  .tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .chip{display:inline-flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:7px 11px;font-size:13px;color:var(--muted)}
-  .chip select,.chip input[type="date"]{border:none;background:transparent;color:var(--ink);font-size:13px;font-family:inherit;cursor:pointer;padding:2px}
-  html[data-theme="dark"] .chip input[type="date"]{color-scheme:dark}
-  .iconbtn{width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:10px;cursor:pointer}
-  .iconbtn:hover{background:var(--tile)}
-  .btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:13px;font-weight:500;padding:8px 13px;border-radius:10px;cursor:pointer}
-  .btn:hover{background:var(--tile)}
-  .btn.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
-  .btn.primary:hover{filter:brightness(.96)}
-  details.menu{position:relative}
-  details.menu>summary{list-style:none;cursor:pointer}
-  details.menu>summary::-webkit-details-marker{display:none}
-  .menu-pop{position:absolute;right:0;top:44px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.14);padding:6px;min-width:190px;z-index:30}
-  .menu-pop button{display:flex;width:100%;align-items:center;gap:9px;background:none;border:none;color:var(--ink);font-size:13px;text-align:left;padding:9px 10px;border-radius:8px;cursor:pointer;font-family:inherit}
-  .menu-pop button:hover{background:var(--tile)}
-  .menu-pop button.danger{color:var(--bad)}
-  .menu-pop .sep{height:1px;background:var(--line);margin:5px 2px}
-  .share-head{padding:7px 10px 3px;font-size:11.5px;color:var(--hint);text-transform:uppercase;letter-spacing:.04em}
-  .share-row{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:8px;font-size:13px;color:var(--ink);cursor:pointer;user-select:none}
-  .share-row:hover{background:var(--tile)}
-  .share-row input{accent-color:var(--blue);margin:0}
-  #file,#histFile{display:none}
-
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
-  .card h3{font-size:14px;font-weight:600;margin:0}
-  .card .ch-sub{font-size:12px;color:var(--hint);margin:2px 0 0}
-  .grid-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px}
-  .scopebar{background:var(--tile);border:1px solid var(--line);border-radius:12px;padding:11px 15px;font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.5}
-  .kpi .kl{display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:13px}
-  .kpi .kl .ki{width:30px;height:30px;border-radius:9px;background:var(--tile);display:flex;align-items:center;justify-content:center;color:var(--muted)}
-  .kpi .kv{font-size:30px;font-weight:700;letter-spacing:-.5px;margin:12px 0 8px;display:flex;align-items:baseline;gap:9px}
-  .kpi .kfoot{font-size:12px;color:var(--hint)}
-  .pill{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:600;padding:2px 8px;border-radius:20px}
-  .pill.good{color:var(--good);background:var(--good-bg)}
-  .pill.bad{color:var(--bad);background:var(--bad-bg)}
-  .pill.flat{color:var(--muted);background:var(--tile)}
-
-  .grid-main{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:16px}
-  .col{display:flex;flex-direction:column;gap:16px;min-width:0}
-  .row-h{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-  .hero-n{font-size:34px;font-weight:700;letter-spacing:-.5px;margin:14px 0 4px;display:flex;align-items:baseline;gap:10px}
-  .canvas-wrap{position:relative;width:100%}
-  /* TradingView floating chart bar: [− +] [‹ ›] [⟲], bottom-center, hover-reveal, delayed name tooltips */
-  .canvas-wrap .tvbar{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);z-index:6;display:flex;gap:6px;opacity:0;transition:opacity .15s;pointer-events:none}
-  .canvas-wrap:hover .tvbar{opacity:.97;pointer-events:auto}
-  .tvbar button{position:relative;width:32px;height:30px;display:inline-flex;align-items:center;justify-content:center;border:none;background:var(--panel);color:var(--ink);border-radius:8px;cursor:pointer;font-size:16px;font-weight:600;line-height:1;padding:0;box-shadow:0 1px 6px rgba(0,0,0,.18)}
-  .tvbar button:hover{background:var(--tile)}
-  .tvbar button[data-act="back"],.tvbar button[data-act="reset"]{margin-left:16px}
-  html[data-theme="dark"] .tvbar button{background:#2e3138;color:#e8eaee;box-shadow:none}
-  html[data-theme="dark"] .tvbar button:hover{background:#3d414a;color:#fff}
-  .tvbar button::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#111826;color:#fff;font-size:11px;font-weight:500;font-family:inherit;padding:4px 9px;border-radius:6px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .12s;z-index:8}
-  .tvbar button:hover::after{opacity:1;transition-delay:.5s}
-  .breakdown{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line2)}
-  .bd .bd-n{font-size:20px;font-weight:700}
-  .bd .bd-l{font-size:12px;color:var(--muted)}
-  .bd .bar{height:4px;border-radius:3px;margin-top:8px;background:var(--line)}
-
-  /* stage feature: TradingView-style watchlist rows */
-  .stage-row{display:grid;grid-template-columns:200px 110px 72px 104px 46px;align-items:center;gap:14px;padding:11px 0;border-top:1px solid var(--line2)}
-  .stage-row:first-child{border-top:none}
-  .stage-row .snm{font-weight:500}
-  .stage-row .spark{line-height:0}
-  .stage-row .sd{font-weight:600;text-align:right}
-  .stage-row .sn{color:var(--muted);text-align:right;font-size:13px}
-  .stage-row .sc{text-align:right}
-  .colhdr{display:grid;grid-template-columns:200px 110px 72px 104px 46px;gap:14px;font-size:11px;color:var(--hint);letter-spacing:.6px;text-transform:uppercase;margin-top:12px;padding-bottom:4px}
-  .colhdr .r{text-align:right}
-  .mktsum{display:flex;gap:14px;font-size:12px;color:var(--muted)}
-  .mktsum b{font-weight:600}
-  .pend-row{display:grid;grid-template-columns:1fr auto auto auto;gap:14px;align-items:center;padding:10px 4px;border-top:1px solid var(--line2);font-size:13.5px}
-  .pend-row:first-child{border-top:none}
-  .pend-row .pn{font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .pend-row .pm{color:var(--muted);white-space:nowrap;font-size:12.5px}
-  .hist-row{display:grid;grid-template-columns:1fr auto auto auto;gap:14px;align-items:center;padding:13px 4px;border-top:1px solid var(--line2)}
-  .hist-row:first-child{border-top:none}
-  .hist-row .hf{font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .hist-row .hm{font-size:12.5px;color:var(--muted);white-space:nowrap}
-  .hist-row .ha{display:flex;gap:6px}
-  .tablewrap{overflow:auto;max-height:430px;margin-top:14px;border:1px solid var(--line);border-radius:10px}
-  .htable{border-collapse:collapse;font-size:12px;min-width:100%}
-  .htable th{position:sticky;top:0;background:var(--tile);color:var(--muted);font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;z-index:2}
-  .htable td{padding:7px 10px;border-bottom:1px solid var(--line2);white-space:nowrap;color:var(--ink)}
-  @media(max-width:720px){ .hist-row{grid-template-columns:1fr auto} .hist-row .hm.hdate{display:none} }
-  .tf{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
-  .tf button{border:none;background:var(--panel);color:var(--muted);font-size:12px;font-weight:500;padding:8px 10px;cursor:pointer;border-right:1px solid var(--line)}
-  .tf button:last-child{border-right:none}
-  .tf button:hover{background:var(--tile)}
-  .tf button.on{background:var(--blue);color:#fff}
-  .stage-wrap{display:grid;grid-template-columns:400px 16px 1fr;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:12px;transition:grid-template-columns .28s ease}
-  .stage-wrap.collapsed{grid-template-columns:0 16px 1fr}
-  .stage-wrap .wl{grid-column:1}
-  .stage-wrap .wl-toggle{grid-column:2}
-  .stage-wrap .chartpane{grid-column:3}
-  .stage-wrap .wl{min-width:0;overflow:hidden}
-  .stage-wrap.collapsed .wl{visibility:hidden;transition:visibility 0s .28s}
-  .wl-toggle{border:none;border-right:1px solid var(--line);background:var(--tile);color:var(--hint);cursor:pointer;font-size:13px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center}
-  .wl-toggle:hover{background:var(--blue-soft);color:var(--blue)}
-  .wl-toggle:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
-  .wl-row:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
-  .canvas-wrap:focus-within .tvbar{opacity:.97;pointer-events:auto}
-  .ins-go{margin-left:auto;font-size:11px;color:var(--blue);opacity:.55;white-space:nowrap}
-  .ins-card:hover .ins-go,.ins-card:focus-visible .ins-go{opacity:1}
-  .wl-toggle .wl-lbl{writing-mode:vertical-rl;font-size:9.5px;letter-spacing:.6px;color:var(--hint);margin-top:6px}
-  .mini-nav{display:none;gap:6px;margin-left:8px}
-  .kpi-click{cursor:pointer}
-  .kpi-click:hover{background:var(--tile)}
-  .kpi-click:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
-  .kpi-note{grid-column:1/-1;font-size:11.5px;color:var(--hint);margin-top:-4px}
-  .kv-cap{font-size:9.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--hint);font-weight:600;margin-top:2px}
-  .kv-status{font-size:21px;font-weight:700}
-  .kv-status.good{color:var(--good)}.kv-status.bad{color:var(--bad)}.kv-status.flat{color:var(--muted)}
-  .kfoot b{color:var(--ink);font-weight:600;font-size:12.5px}
-  .linky{background:none;border:none;color:var(--blue);cursor:pointer;font:inherit;font-size:inherit;padding:0;text-decoration:underline;text-underline-offset:2px}
-  #sbTable{overflow-x:auto}
-  .sb-grid{display:grid;grid-template-columns:minmax(160px,1fr) 110px 90px 96px 70px 100px 84px;gap:8px;align-items:center;min-width:660px}
-  .sb-h{padding:9px 10px 7px;border-bottom:1px solid var(--line);font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--hint);font-weight:600;cursor:pointer;user-select:none}
-  .sb-h:hover{color:var(--ink)}
-  .sb-h.on{color:var(--ink)}
-  .sb-h:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
-  .sb-row{padding:11px 10px;border-bottom:1px solid var(--line2);font-size:13px;cursor:pointer}
-  .sb-row:hover{background:var(--tile)}
-  .sb-r{text-align:right}
-  .sb-name{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #demoBanner{background:#b7791f;color:#fff;border-radius:10px;padding:9px 14px;font-size:13px;font-weight:600;margin-bottom:14px;text-align:center}
-  #demoBanner.hidden{display:none}
-  #stageWarn{background:#b7791f;color:#fff;border-radius:10px;padding:9px 14px;font-size:13px;font-weight:600;margin-bottom:14px;text-align:center}
-  #stageWarn.hidden{display:none}
-  .inote{display:flex;align-items:center;gap:10px;justify-content:space-between;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:9px 14px;font-size:12.5px;color:var(--muted);margin-bottom:14px}
-  .inote.err{border-color:#FF4D5A;color:#c4303c}
-  .inote.hidden{display:none}
-  .inote button#importNoteX{background:none;border:none;font-size:16px;cursor:pointer;color:var(--hint)}
-  .pill.worse{}
-  #stageInsights{display:flex;flex-direction:column;gap:5px;margin-top:6px}
-  .ins-card{display:grid;grid-template-columns:14px 218px 1fr auto;align-items:baseline;gap:9px;width:100%;text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:8px 12px;font-size:12.5px;line-height:1.5;color:var(--muted);cursor:pointer;font-family:inherit}
-  .ins-card.flat{display:flex}
-  .ins-card b{color:var(--ink);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-  .ins-hdr{display:grid;grid-template-columns:14px 218px 1fr;gap:9px;padding:2px 12px 4px;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--hint);font-weight:600}
-  .ins-card:hover{background:var(--tile)}
-  .ins-card:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
-  .ins-card.flat{cursor:default}
-  .ins-card.flat:hover{background:var(--panel)}
-  .ins-dot{width:8px;height:8px;border-radius:50%;flex:none;align-self:center}
-  .ins-dot.red{background:#FF4D5A}.ins-dot.amber{background:#f0a24e}.ins-dot.green{background:#00C896}.ins-dot.flat{background:#9aa2af}
-  .wl{border-right:1px solid var(--line)}
-  .wl-row{display:grid;grid-template-columns:1fr 40px 46px 74px;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line2);cursor:pointer}
-  .wl-row .wcnt{font-size:11.5px;color:var(--hint);text-align:right}
-  .wl-row .pill{justify-self:end;min-width:64px;text-align:center;box-sizing:border-box}
-  .wl-hdr{display:grid;grid-template-columns:1fr 40px 46px 74px;gap:8px;align-items:center;padding:9px 14px 7px;border-bottom:1px solid var(--line);font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--hint);font-weight:600}
-  .wl-hdr .h-r{text-align:right}
-  .wl-row:last-child{border-bottom:none}
-  .wl-row:hover{background:var(--tile)}
-  .wl-row.sel{background:var(--blue-soft)}
-  .wl-row .wnm{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .wl-row .wlast{font-weight:600;font-size:13px;text-align:right;min-width:40px}
-  .chartpane{padding:16px 18px;min-width:0;position:sticky;top:14px;align-self:start}
-  .chartpane .cp-h{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
-  .chartpane .cp-name{font-size:15px;font-weight:600}
-  .chartpane .cp-price{font-size:28px;font-weight:700;letter-spacing:-.5px}
-
-  .empty{background:var(--panel);border:1px dashed var(--line);border-radius:var(--radius);padding:60px 20px;text-align:center;color:var(--muted)}
-  .empty .big{font-size:18px;color:var(--ink);font-weight:600;margin-bottom:6px}
-  .empty .btn{margin-top:16px}
-  .hidden{display:none}
-  .toast{position:fixed;right:20px;bottom:20px;background:#101828;color:#fff;padding:12px 16px;border-radius:10px;font-size:13px;box-shadow:0 8px 30px rgba(0,0,0,.2);opacity:0;transform:translateY(8px);transition:.2s;pointer-events:none;z-index:50}
-  .toast.show{opacity:1;transform:none}
-  .toast.err{background:#7a1414}
-
-  @media(max-width:1080px){ .grid-main{grid-template-columns:1fr} .grid-kpi{grid-template-columns:repeat(2,1fr)} .stage-wrap,.stage-wrap.collapsed{grid-template-columns:1fr} .stage-wrap .wl-toggle{display:none} .stage-wrap.collapsed .wl{visibility:visible} .stage-wrap .wl{grid-column:1;grid-row:1;max-height:260px;overflow-y:auto;border-right:none;border-bottom:1px solid var(--line)} .stage-wrap .chartpane{grid-column:1;grid-row:2;position:static} }
-  @media(max-width:860px){ .stage-wrap,.stage-wrap.collapsed{grid-template-columns:1fr} .stage-wrap .wl-toggle{display:none} .stage-wrap.collapsed .wl{visibility:visible} .stage-wrap .wl{grid-column:1;grid-row:1;max-height:260px;overflow-y:auto;border-right:none;border-bottom:1px solid var(--line)} .stage-wrap .chartpane{grid-column:1;grid-row:2;position:static} }
-  @media(max-width:720px){ .side{display:none} .grid-kpi{grid-template-columns:1fr} .main{padding:16px 14px 48px} .top h1{font-size:20px} .hero-n{font-size:28px} .card{padding:16px 15px} .mktsum{width:100%;margin-top:6px} .mini-nav{display:inline-flex} }
-  @media(max-width:420px){ .tf button{padding:8px 8px} .chip{padding:6px 8px} .cp-h{flex-wrap:wrap} .cp-price{font-size:24px} #cpReadout{width:100%} }
-  @media print{ .side,.top .tools,.tvbar{display:none!important} .main{padding:0} body{background:#fff} .card{break-inside:avoid}
-    .share-hide{display:none!important}
-    body.share-partial .grid-kpi,body.share-partial .grid-main,body.share-partial .col{display:block}
-    body.share-partial .card{margin-bottom:16px} }
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  #app{max-width:1040px;margin:0 auto;padding:18px 20px 60px}
+  #app.drag{outline:2px dashed var(--accent);outline-offset:-8px}
+  h1{font-size:22px;margin:.2em 0}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:26px 0 10px;font-weight:600}
+  .muted{color:var(--muted)}
+  b{font-weight:650}
+  /* top bar */
+  .top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding-bottom:6px}
+  .brand b{font-size:18px}
+  .tagline{display:block;font-size:12px;color:var(--muted)}
+  .controls{display:flex;gap:8px;align-items:center}
+  .btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:14px;font-weight:600;cursor:pointer}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--line);padding:8px 11px}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{background:var(--panel);color:var(--muted);border:none;padding:7px 13px;font-size:13px;cursor:pointer}
+  .seg button.on{background:var(--accent);color:#fff}
+  /* exec band */
+  .exec{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:18px 20px;margin-top:12px}
+  .exec-date{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+  .exec-line{font-size:17px;margin:4px 0}
+  .exec-line.muted{font-size:14px}
+  .delta{color:var(--muted);font-weight:600}
+  /* notices */
+  .notices{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+  .notice{background:var(--warnbg);color:var(--warn);border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:13px}
+  /* focus */
+  .frow{width:100%;display:grid;grid-template-columns:96px 1fr auto;grid-template-areas:"fx stage go" "fx det go";gap:2px 14px;align-items:center;text-align:left;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--bad);border-radius:12px;padding:12px 16px;margin-bottom:8px;cursor:pointer;box-shadow:var(--shadow);color:inherit;font:inherit}
+  .frow:hover{border-color:var(--accent)}
+  .fx{grid-area:fx;font-size:24px;font-weight:700;line-height:1;display:flex;flex-direction:column}
+  .fx small{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .fstage{grid-area:stage;font-size:15px;font-weight:600}
+  .fdet{grid-area:det;font-size:13px;color:var(--muted)}
+  .fgo{grid-area:go;color:var(--accent);font-size:13px;font-weight:600;white-space:nowrap}
+  .tag{font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;margin-left:6px}
+  .tag.customer{background:var(--warnbg);color:var(--warn)}
+  .tag.team{background:var(--okbg);color:var(--muted)}
+  .actfirst,.filling{font-size:13px;margin-top:8px}
+  /* table */
+  .tscroll{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel);box-shadow:var(--shadow)}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  tr:last-child td{border-bottom:none}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .badge{font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px}
+  .sev-bad{background:var(--badbg);color:var(--bad)} .sev-warn{background:var(--warnbg);color:var(--warn)}
+  .sev-good{background:var(--goodbg);color:var(--good)} .sev-ok{background:var(--okbg);color:var(--ok)} .sev-mute{background:var(--mutebg);color:var(--mute)}
+  /* drill */
+  .drill{margin-top:14px;background:var(--panel);border:1px solid var(--accent);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
+  .drill-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .drill-head button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px}
+  .drilltbl{margin-top:4px}
+  /* empty */
+  .empty{text-align:center;padding:80px 20px}
+  .empty .btn{margin-top:14px}
 </style>
 </head>
 <body>
-<div class="app">
-  <aside class="side">
-    <div class="brand"><div class="mk">CS</div><div><b>CS DASHBOARD</b><span>General Devices</span></div></div>
-    <nav class="nav">
-      <a class="on" tabindex="0" data-goto="kpis"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Dashboard</a>
-      <a tabindex="0" data-goto="sec-backlog"><svg class="ic" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>Open Pipeline (Backlog)</a>
-      <a tabindex="0" data-goto="sec-stage"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Time in Stage</a>
-      <a tabindex="0" data-view="stagebd"><svg class="ic" viewBox="0 0 24 24"><path d="M3 5h18M3 10h18M3 15h18M3 20h12"/></svg>Stage Breakdown</a>
-      <a tabindex="0" data-goto="sec-speed"><svg class="ic" viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>PO to Go-Live</a>
-      <a tabindex="0" data-view="history"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 109-9 9.7 9.7 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>Import History</a>
-      <a tabindex="0" data-view="howto"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 015.8 1c0 2-3 2.5-3 4"/><path d="M12 17.5h.01"/></svg>How to Use</a>
-    </nav>
-    <div class="grow"></div>
-    <div class="privacy"><b>Private by design</b>Your data stays in this browser. Nothing is uploaded. Use Back up to save a copy you can restore anywhere.</div>
-  </aside>
-
-  <main class="main">
-    <div class="top">
-      <div><h1>IMPLEMENTATION PIPELINE</h1><div class="sub" id="subtitle"></div></div>
-      <div class="tools">
-        <span class="tf" id="cohortSel" title="Filter the whole dashboard by product">
-          <button data-c="all" class="on">All</button><button data-c="CAREpoint">CAREpoint</button><button data-c="e-Bridge">e-Bridge</button>
-        </span>
-        <span class="mini-nav"><button class="btn" data-view="history">Import History</button><button class="btn" data-view="howto">How to Use</button></span>
-        <span class="tf" id="tfPresets">
-          <button id="todayBtn" title="End the date range at the most recent data day">Today</button><button data-tf="lastm">Last month</button><button data-tf="1">1M</button><button data-tf="3">3M</button><button data-tf="6">6M</button><button data-tf="12">1Y</button><button data-tf="all">All</button>
-        </span>
-        <span class="chip" id="rangeChip">
-          <svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>
-          <input type="date" id="fromDate" title="From date">
-          <span style="color:var(--hint)">→</span>
-          <input type="date" id="toDate" title="To date">
-        </span>
-        <button class="iconbtn" id="themeBtn" title="Toggle dark mode"><svg class="ic" id="themeIc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg></button>
-        <details class="menu"><summary class="btn">Share ▾</summary><div class="menu-pop" style="width:250px">
-          <div class="share-head">What to include</div>
-          <div style="font-size:11px;color:var(--hint);padding:2px 0 6px">Sharing the page link shows the recipient sample data, not yours · send the PNG or PDF instead</div>
-          <label class="share-row"><input type="checkbox" id="shareAll" checked> Full dashboard (all cards)</label>
-          <div class="sep"></div>
-          <div id="sharePick"></div>
-          <div class="sep"></div>
-          <button id="pngBtn"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>Download PNG</button>
-          <button id="pdfBtn"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>Download PDF</button>
-        </div></details>
-        <button class="btn primary" id="importBtn"><svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Import</button>
-        <details class="menu"><summary class="iconbtn" title="Data options"><svg class="ic" viewBox="0 0 24 24" style="width:18px;height:18px"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></summary><div class="menu-pop">
-          <button id="backup"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Back up history</button>
-          <button id="restore"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px"><path d="M12 21V9"/><path d="M7 14l5-5 5 5"/><path d="M5 3h14"/></svg>Restore backup</button>
-          <div class="sep"></div>
-          <button id="reset" class="danger"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>Reset all data</button>
-        </div></details>
-        <input type="file" id="file" accept=".csv,text/csv"><input type="file" id="histFile" accept=".json">
-      </div>
-    </div>
-
-    <div id="stagebd" class="hidden">
-      <section class="card">
-        <div class="row-h"><div><h3>Stage breakdown</h3><p class="ch-sub" id="sbSub"></p></div>
-        <span><button class="btn" id="sbPng">Download PNG</button> <button class="btn" id="sbBack">&larr; Back to dashboard</button></span></div>
-        <p class="ch-sub" style="margin-bottom:10px">Trend tells you how long work sits, vs ~30 days earlier: Aging means sitting longer (bad), Clearing means moving faster (good), Emptied means nothing is left in the stage. Load tells you how heavily the backlog leans on a stage: Heavy holds 10% or more of open work, Moderate 5 to 10%, Light under 5%. Open and % of backlog are as of the latest import.</p>
-        <div id="sbTable"></div>
-      </section>
-    </div>
-
-    <div id="history" class="hidden">
-      <section class="card">
-        <div class="row-h"><div><h3>Import history</h3><p class="ch-sub">Every export imported into this dashboard · newest first · stored in this browser · keeps the most recent 12 files</p></div>
-        <button class="btn" id="histBack">← Back to dashboard</button></div>
-        <div id="histList" style="margin-top:14px"></div>
-      </section>
-      <section class="card hidden" id="histPreview" style="margin-top:16px">
-        <div class="row-h"><div><h3 id="hpTitle">—</h3><p class="ch-sub" id="hpSub"></p></div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="hpExport"><svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Download CSV</button><button class="btn" id="hpClose">Close</button></div></div>
-        <div class="tablewrap" id="hpTable"></div>
-      </section>
-    </div>
-
-    <div id="howto" class="hidden">
-      <section class="card" style="max-width:860px">
-        <div class="row-h"><div><h3>How to use</h3><p class="ch-sub">Documentation and reference for this dashboard</p></div>
-        <button class="btn" id="howtoBack">← Back to dashboard</button></div>
-        <div style="font-size:13.5px;line-height:1.7;margin-top:14px;color:var(--ink);max-width:720px">
-          <div style="font-size:12px;line-height:2;margin-bottom:12px;color:var(--hint)">Jump to: <a href="#ht-0" style="color:var(--blue);text-decoration:none">What this is</a> · <a href="#ht-1" style="color:var(--blue);text-decoration:none">The monthly routine</a> · <a href="#ht-2" style="color:var(--blue);text-decoration:none">Getting the export right</a> · <a href="#ht-3" style="color:var(--blue);text-decoration:none">Reading the dashboard</a> · <a href="#ht-4" style="color:var(--blue);text-decoration:none">What the colors mean</a> · <a href="#ht-5" style="color:var(--blue);text-decoration:none">Timeframes and comparisons</a> · <a href="#ht-6" style="color:var(--blue);text-decoration:none">Exploring a chart</a> · <a href="#ht-7" style="color:var(--blue);text-decoration:none">The stage alerts</a> · <a href="#ht-8" style="color:var(--blue);text-decoration:none">Why product counts can add past the total</a> · <a href="#ht-9" style="color:var(--blue);text-decoration:none">Why PO to Go-Live has gaps</a> · <a href="#ht-10" style="color:var(--blue);text-decoration:none">Implementations that can't be counted</a> · <a href="#ht-11" style="color:var(--blue);text-decoration:none">Your data</a></div>
-          <b id="ht-0">What this is</b><br><span style="color:var(--muted)">HubSpot shows you today. This dashboard shows you the trend. Import your monthly export and see how open implementations, stage times, and delivery speed are moving, and whether they're getting better or worse. The app opens with sample data so you can explore first. Your first real import replaces it.</span><br><br>
-          <b id="ht-1">The monthly routine</b><br><span style="color:var(--muted)">1. Export all Implementation records from HubSpot. 2. Import the CSV here. 3. That's it. The dashboard updates and remembers that month, so the picture builds over time.</span><br><br>
-          <b id="ht-2">Getting the export right</b><br><span style="color:var(--muted)">In HubSpot go to CRM &rarr; Implementations, open the <b>All Implementations</b> view, and clear every filter before exporting. The dashboard needs open AND completed implementations: any leftover filter (owner, stage, date) shrinks the file, skews history, and triggers the size warning on import. Then Export &rarr; file format <b>CSV</b> &rarr; include the properties <b>in your view's columns</b> (your standard 45-column view has everything; "All properties on records" also works but makes a much larger file). Name the file <b>implementations_YYYY-MM-DD.csv</b> so the app knows which month it counts as.<br><br>
-          <b style="color:var(--ink)">The 10 properties that must be in the export (exact HubSpot names):</b> Record ID &middot; Implementation Name &middot; Implementation Type &middot; Implementation pipeline stage &middot; Time in current stage &middot; Date entered current stage &middot; PO Date &middot; Implementation Live/Complete &middot; Duration between PO date and Live/Complete Date &middot; Object create date/time. Also used when present: Estimated Go-Live Date (feeds the next-30-days line) and the per-stage "Date entered/exited &hellip; (Implementation Pipeline)" columns (they power Time in Stage; your view already has all of them). Every one of these names was verified against the real exports and the live pipeline on Jul 3, 2026.</span><br><br>
-          <b id="ht-3">Reading the dashboard</b><br><span style="color:var(--muted)">The four cards up top give you the trend, not the number: Rising, Steady, or Falling for open work, each product, and Go-Lives, always compared to the period before yours (within 2% counts as Steady). The small line under each verdict carries the exact count and change. The charts below hold the detail. Open Pipeline Trend shows whether open work is piling up or clearing. Time in Stage shows where work gets stuck; click any stage to chart it. The Stage Breakdown page in the sidebar grades every stage at once: Trend tells you how long work sits (Aging = sitting longer, Clearing = moving faster), Load tells you how heavily the backlog leans on it (Heavy holds 10%+ of open work), and every column sorts on click. PO to Go-Live shows how long customers wait from Purchase Order to Go-Live. Go-Lives counts what actually shipped. Implementations that went live but haven't been moved to the Live/Complete stage in HubSpot are cleanup work waiting on someone. The Go-Lives chart shows a "went live but not closed out" link when any exist; click it to see exactly which implementations are waiting, by name. The count next to each stage in Time in Stage is how many implementations are sitting there right now, and the line under the pipeline chart shows how many started, how many closed out, and the net change for your period.</span><br><br>
-          <b id="ht-4">What the colors mean</b><br><span style="color:var(--muted)">Green means improving. Red means worsening. That's the whole rule. The dotted line on each chart marks where the visible period started. Green below that line means better than the start, red above it means worse. Go-Lives bars stay neutral blue because they're a simple count. Its change pill turns green when more went live than the period before.</span><br><br>
-          <b id="ht-5">Timeframes and comparisons</b><br><span style="color:var(--muted)">Pick a preset (Last month, 1M, 3M, 6M, 1Y, All) or set exact dates. The app opens on the last full calendar month and remembers your choice next time. Today snaps the end date to the most recent data day. The product buttons (All, CAREpoint, e-Bridge) filter the whole dashboard to one product. Every number, chart, and comparison recalculates for that period. Change pills always compare to the equal-length period right before yours. Charts show exactly the period you selected, so the trend pill and the line always describe the same window. Zoom in for detail any time.</span><br><br>
-          <b id="ht-6">Exploring a chart</b><br><span style="color:var(--muted)">Hold Ctrl (or ⌘ on Mac) and scroll to zoom, so normal page scrolling never moves a chart. Drag to pan. Double-click to reset. The floating bar at the bottom of each big chart does the same with buttons: zoom in and out, step back and forward through time, reset. On Time in Stage, the &#8249; handle tucks the stage list away so the chart gets the full width. Press it again to bring the list back.</span><br><br>
-          <b id="ht-7">The stage alerts</b><br><span style="color:var(--muted)">Under the Time in Stage chart, the rows labeled Stage and What's happening surface up to four findings on their own: the biggest bottleneck, unusual jumps, the fastest-aging stage, and the biggest improvement. The rows are computed from the same data as everything else and update with every import, timeframe, and product filter. Click a row to chart that stage.</span><br><br>
-          <b id="ht-8">Why product counts can add past the total</b><br><span style="color:var(--muted)">An implementation can be both CAREpoint and e-Bridge. It counts once in the total but shows up in both product columns, so 163 + 87 can exceed a total of 217. Nothing is double-counted.</span><br><br>
-          <b>Why Go-Lives bars may not match the headline</b><br><span style="color:var(--muted)">Bars show full weeks or months. If your period starts mid-month, the first bar still shows the whole month, so the bars can add past the headline. The headline is always the exact count for your dates. Trust the headline for totals, the bars for shape.</span><br><br>
-          <b id="ht-9">Why PO to Go-Live has gaps</b><br><span style="color:var(--muted)">That chart only plots days when something went live. Quiet days aren't drawn, so points sit closer together than the calendar would suggest when you zoom in to daily detail.</span><br><br>
-          <b id="ht-10">Implementations that can't be counted</b><br><span style="color:var(--muted)">An implementation without a create date can't be placed on the timeline, so it's left out of the open counts. The speed average skips implementations with no Purchase Order date, or where the dates run backwards. Real HubSpot exports set these automatically, so this mostly matters for hand-edited files.</span><br><br>
-          <b id="ht-11">Your data</b><br><span style="color:var(--muted)">Everything runs in your browser. Nothing uploads anywhere. Back up saves your history to a file, Restore loads it back, and Reset wipes this browser clean. Back up before you reset.</span>
-        </div>
-        
-      </section>
-    </div>
-
-    <div id="empty" class="empty">
-      <div class="big">Import your HubSpot export to begin</div>
-      <div style="max-width:640px;margin:10px auto 0;text-align:left;font-size:13.5px;line-height:1.8;color:var(--muted)">
-        <b style="color:var(--ink)">What to export (records, not a report):</b><br>
-        <b style="color:var(--ink)">1.</b> In HubSpot: <b>CRM → Implementations → All records → Export</b>.<br>
-        <b style="color:var(--ink)">2.</b> Use the <b>All Implementations</b> view with <b>every filter cleared</b> · open and completed both matter.<br>
-        <b style="color:var(--ink)">3.</b> Format <b>CSV</b> · include the properties <b>in your view's columns</b> (your standard view has all 45; "All properties" also works, just bigger).<br>
-        <b style="color:var(--ink)">4.</b> Name it like <code>implementations_2026-07-01.csv</code> (the date tells the app which month it counts as).<br>
-        <b style="color:var(--ink)">5.</b> Drop it here or click Import. Re-importing later just refreshes the data.
-        <details style="margin-top:10px"><summary style="cursor:pointer;color:var(--ink)">Required fields and assumptions</summary>
-        <div style="font-size:12.5px;margin-top:8px">
-        <b style="color:var(--ink)">Must be present (exact HubSpot names):</b> Record ID · Implementation Name · Implementation Type · Implementation pipeline stage · Time in current stage · Date entered current stage · PO Date · Implementation Live/Complete · Duration between PO date and Live/Complete Date · Object create date/time, plus the per-stage <code>Date entered/exited "[stage] (Implementation Pipeline)"</code> columns and Estimated Go-Live Date (all part of the standard view). Verified against the live HubSpot pipeline and three real exports on Jul 3, 2026.<br><br>
-        <b style="color:var(--ink)">Assumptions the math relies on:</b> one row per implementation · durations are HubSpot's raw milliseconds · dates are YYYY-MM-DD or MM/DD/YYYY · Implementation Type values contain "CAREpoint" / "e-Bridge" (both = counted in both) · the Live/Complete <b>date</b> means the customer went live · moving to the Live/Complete <b>stage</b> means the record left the pipeline.
-        </div></details>
-      </div>
-      <div style="display:flex;gap:8px;justify-content:center"><button class="btn primary" id="importBtn2">Import</button><button class="btn" id="demoBtn">Load sample data</button></div>
-      <div style="font-size:12px;color:var(--hint);margin-top:14px">Everything runs in your browser · nothing is uploaded</div>
-    </div>
-
-    <div id="dashboard" class="hidden">
-      <div id="demoBanner" class="hidden">Sample data · nothing here is a company number · import your HubSpot export to see real numbers</div>
-      <div id="stageWarn" class="hidden"></div>
-      <div id="importNote" class="inote hidden"><span id="importNoteMsg"></span><button id="importNoteX" title="Dismiss">&times;</button></div>
-      <section class="grid-kpi" id="kpis"></section>
-
-
-      <!-- Story order: how much work → is it growing → where is it stuck → what it does to timelines → what we shipped -->
-      <section class="card" id="sec-backlog" style="margin-bottom:16px">
-        <div class="row-h"><div><h3>OPEN PIPELINE TREND</h3><p class="ch-sub">Every implementation still in progress · each one stays open until it reaches Live/Complete</p></div><div id="backlogPill"></div></div>
-        <div class="hero-n"><span id="backlogNow">0</span><small>open</small><span id="backlogTrend"></span></div>
-        <div class="canvas-wrap" style="height:240px"><canvas id="backlogChart"></canvas></div>
-        <div class="breakdown" id="breakdown"></div>
-        <div class="kpi-note" id="flowCap" style="margin-top:10px"></div>
-      </section>
-
-      <section class="card" id="sec-stage" style="margin-bottom:16px">
-        <div class="row-h"><div><h3>TIME IN STAGE</h3><p class="ch-sub">How long open implementations sit in each stage · ▲ red = work sitting longer · ▼ green = clearing faster · % change vs ~30 days earlier, hover for days · click a stage to chart it</p></div><div id="stageSummary" class="mktsum"></div></div>
-        <div class="stage-wrap" id="stageWrap">
-          <div class="wl">
-            <div class="wl-hdr" id="wlHdr"><span>Stage</span><span class="h-r" title="open implementations sitting in the stage">Open</span><span class="h-r" title="average days implementations have been sitting in the stage · list is sorted by this, slowest first">Days</span><span class="h-r" title="percent change vs ~30 days earlier">vs ~30d</span></div>
-            <div id="stageList"></div>
-          </div>
-          <button type="button" class="wl-toggle" id="wlToggle" title="Hide stage list" aria-expanded="true" aria-controls="stageList" aria-label="Hide stage list">&#8249;</button>
-          <div class="chartpane">
-            <div class="cp-h"><span class="cp-name" id="cpName">—</span><span class="cp-price" id="cpPrice">—</span><span id="cpBadge"></span><span id="cpReadout" style="color:var(--muted);font-size:13px"></span></div>
-            <p class="ch-sub" id="cpSub">Avg days in this stage over time · hover to read a day · Ctrl or ⌘ + scroll to zoom · drag to pan · double-click to reset</p>
-            <div class="canvas-wrap" style="height:300px;margin-top:10px"><canvas id="stageBig"></canvas></div>
-            <div id="stageInsights" style="margin-top:14px"></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Exploratory chart: full-width + tall + controls, same class as the backlog chart -->
-      <section class="card" id="sec-speed" style="margin-bottom:16px">
-        <div class="row-h"><div><h3>PO TO GO-LIVE</h3><p class="ch-sub">Average time from Purchase Order to Go-Live, in days</p></div><div id="speedPill"></div></div>
-        <div class="hero-n"><span id="speedNow">—</span><small>days</small></div>
-        <div class="canvas-wrap" style="height:240px"><canvas id="speedChart"></canvas></div>
-        <div id="speedCap" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
-      </section>
-
-      <!-- Outcome metric: full-width but SHORT, no controls — a report line, not an exploration surface -->
-      <section class="card" id="sec-golive">
-        <div class="row-h"><div><h3>GO-LIVES</h3><p class="ch-sub" id="goliveSub">How many implementations went live</p></div><div id="golivePill"></div></div>
-        <div class="hero-n" style="font-size:26px;margin:8px 0 2px"><span id="goliveNow">0</span><small>went live</small></div>
-        <div class="canvas-wrap" style="height:110px"><canvas id="goliveChart"></canvas></div>
-        <div id="goliveCap" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
-      </section>
-      <div id="pendPanel" class="card hidden" style="margin-top:14px;max-height:280px;overflow:auto"></div>
-    </div>
-  </main>
-</div>
-<div class="toast" id="toast"></div>
-<script src="app.js?v=30"></script>
+<div id="app"></div>
+<script type="module" src="app.js?v=33"></script>
 </body>
 </html>
