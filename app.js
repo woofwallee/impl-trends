@@ -93,7 +93,7 @@ function normalize(rows) { const C = CONFIG.columns;
     return { id: (r[C.record_id] || "").trim(), name: (r[C.name] || "").trim(), types: resolveTypes(r[C.impl_type]),
       stage, timeInStageDays: parseDurationDays(r[C.time_in_current_stage]),
       poToLiveDays: parseDurationDays(r[C.duration_po_to_live]), poDate: po, liveDate: live, closedDate,
-      createDate: parseDate(r[C.create_date]), isOpen: stage !== LIVE_STAGE, intervals }; }).filter(r => r.id);
+      createDate: parseDate(r[C.create_date]), estLive: parseDate(r["Estimated Go-Live Date"]), isOpen: stage !== LIVE_STAGE, intervals }; }).filter(r => r.id);
   const byId = new Map(); mapped.forEach(r => byId.set(r.id, r));   // dedupe by Record ID (last wins)
   return [...byId.values()]; }
 
@@ -184,6 +184,10 @@ function applyImport(store, records, snap) {
     store.stageDaily = { all: buildStageDaily(records), "CAREpoint": buildStageDaily(byType("CAREpoint")), "e-Bridge": buildStageDaily(byType("e-Bridge")) };
     store.pendingClose = pendingClose(records, snap);
     store.pendingDaily = pendingDaily(records);
+    const dayCount = (recs2, get) => { const m = {}; for (const r of recs2) { const t = get(r); if (t) { const k = dstr(t); m[k] = (m[k] || 0) + 1; } } return m; };
+    store.startedDaily = { all: dayCount(records, r => r.createDate), "CAREpoint": dayCount(byType("CAREpoint"), r => r.createDate), "e-Bridge": dayCount(byType("e-Bridge"), r => r.createDate) };
+    store.closedDaily = { all: dayCount(records, r => r.closedDate), "CAREpoint": dayCount(byType("CAREpoint"), r => r.closedDate), "e-Bridge": dayCount(byType("e-Bridge"), r => r.closedDate) };
+    store.estUpcoming = records.filter(r => r.isOpen && r.estLive).map(r => ({ d: dstr(r.estLive), types: r.types }));
     store.asOfMonth = snap;
   }
   const unk = {};
@@ -244,7 +248,7 @@ const lastValue = { id: "lastval", afterDatasetsDraw(c) {
   ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
   ctx.setLineDash([]); ctx.globalAlpha = 1; ctx.fillStyle = col;
   if (pt.x >= left && pt.x <= right) { ctx.beginPath(); ctx.arc(pt.x, y, 3, 0, Math.PI * 2); ctx.fill(); }
-  const txt = String(ds.data[i]); ctx.font = "600 10.5px Inter, system-ui, sans-serif";
+  const txt = ((c.options.plugins || {}).lastValPrefix || "") + String(ds.data[i]); ctx.font = "600 10.5px Inter, system-ui, sans-serif";
   const w = ctx.measureText(txt).width + 10, h = 17;
   ctx.beginPath(); ctx.roundRect(right + 1, y - h / 2, w, h, 4); ctx.fill();
   ctx.fillStyle = "#fff"; ctx.textBaseline = "middle"; ctx.fillText(txt, right + 6, y + .5);
@@ -520,6 +524,17 @@ function insightText(f) {                                 // spec card templates
   if (f.kind === "improving") return v.cleared ? `cleared out completely this period` : `down ${Math.abs(v.delta)}d vs ~30 days earlier · clearing faster`;
   return "No stages need attention this period · everything is holding steady";
 }
+let pendOpen = false;                                     // session-only; resets on refresh like the collapse state
+function renderPendPanel(store) {
+  const el = document.getElementById("pendPanel"); if (!el) return;
+  el.classList.toggle("hidden", !pendOpen);
+  if (!pendOpen) return;
+  const pc = (store.pendingClose || []).filter(p => cohort === "all" || (p.types || []).includes(cohort));
+  el.innerHTML = `<div class="row-h" style="margin-bottom:4px"><div><h3 style="font-size:13px">WENT LIVE, NOT CLOSED OUT</h3><p class="ch-sub">waiting for the stage move in HubSpot · longest wait first</p></div><button class="btn" id="pendClose">Close</button></div>`
+    + (pc.length ? pc.map(p => `<div class="pend-row"><span class="pn" title="${p.name}">${p.name}</span><span class="pm">${p.stage}</span><span class="pm">went live ${fmtDay(p.live)}</span><span class="pm">${p.days}d waiting</span></div>`).join("")
+                 : `<div style="color:var(--hint);padding:14px 0">No one is waiting on close-out.</div>`);
+  const x = document.getElementById("pendClose"); if (x) x.addEventListener("click", () => { pendOpen = false; renderPendPanel(loadStore()); });
+}
 function renderInsights(findings) {
   const box = document.getElementById("stageInsights"); if (!box) return;
   box.innerHTML = findings.map(f => f.kind === "none"
@@ -624,7 +639,7 @@ function render(store) {
         foot: atLatest ? (val ? (stale ? `${stale} waiting 30+ days · longest ${worst}d since go-live` : "none waiting long") : "no one waiting on close-out")
                        : `at end of period · vs ${priorName}` }; })(),
   ];
-  document.getElementById("kpis").innerHTML = kpis.map((k, i) => `<div class="card kpi" data-share="kpi-${i}">
+  document.getElementById("kpis").innerHTML = kpis.map((k, i) => `<div class="card kpi${i === 3 ? " kpi-click" : ""}" data-share="kpi-${i}"${i === 3 ? ' data-pend="1" role="button" tabindex="0" title="Click to see which implementations"' : ""}>
     <div class="kl">${k.label}<span class="ki"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px">${k.icon}</svg></span></div>
     <div class="kv">${typeof k.val === "number" ? k.val.toLocaleString() : k.val} ${k.pill}</div><div class="kfoot">${k.foot}</div></div>`).join("")
     + `<div class="kpi-note">Products overlap · an implementation can be both, counted once in the total</div>`;
@@ -643,7 +658,13 @@ function render(store) {
 
   // go-lives — bars bucketed to the window + prior-period comparison
   document.querySelector("#sec-golive h3").textContent = "GO-LIVES" + cohortLabel();
-  document.getElementById("goliveSub").textContent = `How many implementations went live · each bar is one ${glBucket}`;
+  let estLine = "";
+  if (Array.isArray(store.estUpcoming) && bounds) {
+    const hEnd = dstr(new Date(new Date(bounds[1] + "T00:00:00Z").getTime() + 30 * MS_PER_DAY));
+    const nEst = store.estUpcoming.filter(e => e.d > bounds[1] && e.d <= hEnd && (cohort === "all" || (e.types || []).includes(cohort))).length;
+    if (nEst) estLine = ` · ${nEst} estimated to go live in the next 30 days`;
+  }
+  document.getElementById("goliveSub").textContent = `How many implementations went live · each bar is one ${glBucket}` + estLine;
   document.getElementById("goliveNow").textContent = glWinTotal.toLocaleString();
   document.getElementById("golivePill").innerHTML = goliveDelta != null ? pill(goliveDelta, false) + ` <span style="font-size:12px;color:var(--hint)">vs ${priorName}</span>` : "";
   barChart("goliveChart", glKeys.map(k => ({ m: k, v: glAll[k] })), glFmt, glBucket, viewRange);
@@ -655,21 +676,37 @@ function render(store) {
   document.getElementById("breakdown").innerHTML = [
     { l: "Total open", v: cur.total, c: "var(--ink)" }, { l: "CAREpoint", v: cur["CAREpoint"] || 0, c: CP }, { l: "e-Bridge", v: cur["e-Bridge"] || 0, c: EB },
   ].map(b => `<div class="bd"><div class="bd-n">${b.v.toLocaleString()}</div><div class="bd-l">${b.l}</div><div class="bar" style="background:${b.c};width:${Math.max(8, Math.round(b.v / bdTot * 100))}%"></div></div>`).join("");
+  const flowEl = document.getElementById("flowCap");
+  if (flowEl) {
+    const stMap = (store.startedDaily || {})[cohort], clMap = (store.closedDaily || {})[cohort];
+    if (stMap && clMap && hasWin) {
+      const d0 = win[0].date, sumAfter = m => { let n = 0; for (const [d, c] of Object.entries(m)) if (d > d0 && inDayRange(d)) n += c; return n; };
+      const started = sumAfter(stMap), closed = sumAfter(clMap);
+      const net = bl(cur) - bl(win[0]);
+      flowEl.textContent = `${started} started · ${closed} closed out · net ${net >= 0 ? "+" + net : net} since ${fmtDay(d0)}`;
+    } else flowEl.textContent = "";
+  }
 
   // speed to go-live (PO -> live/complete, by go-live month) — also native in HubSpot; here so the monthly story is one page
   if (speedTo != null) {
     document.querySelector("#sec-speed h3").textContent = "PO TO GO-LIVE" + cohortLabel();
     document.getElementById("speedNow").textContent = speedTo;
     document.getElementById("speedPill").innerHTML = speedDelta != null ? pill(speedDelta, true) + ` <span style="font-size:12px;color:var(--hint)">vs ${priorName}</span>` : "";
-    if (Object.keys(m2dc).length) {                      // full history; day-granularity by default so the baseline shows movement
-      const spBucket = vpUserSet ? glBucket : "day";
-      const spKey = d => spBucket === "day" ? d : glKey(d);
+    let spN = 0;
+    if (Object.keys(m2dc).length) {                      // full history; weekly buckets at minimum so single-go-live days don't read as trend
+      const spBucket = glBucket === "day" ? "week" : glBucket;
+      const spKey = d => spBucket === "month" ? d.slice(0, 7)
+        : (() => { const dt = new Date(d + "T00:00:00Z"); return dstr(new Date(dt.getTime() - ((dt.getUTCDay() + 6) % 7) * MS_PER_DAY)); })();
       const spFmt = spBucket === "month" ? fmtMonth : fmtDay;
       const spB = {};
-      Object.entries(m2dc).forEach(([d, v]) => { const k = spKey(d); (spB[k] ||= { s: 0, n: 0 }); spB[k].s += v.s; spB[k].n += v.n; });
-      areaChart("speedChart", Object.keys(spB).sort().map(k => ({ m: k, v: Math.round(spB[k].s / spB[k].n) })), 110, spFmt, viewRange);
+      Object.entries(m2dc).forEach(([d, v]) => { const k = spKey(d); (spB[k] ||= { s: 0, n: 0 }); spB[k].s += v.s; spB[k].n += v.n; if (inDayRange(d)) spN += v.n; });
+      const spPts = Object.keys(spB).sort().map(k => ({ m: k, v: Math.round(spB[k].s / spB[k].n), n: spB[k].n }));
+      areaChart("speedChart", spPts, 110, spFmt, viewRange, {
+        tooltipLabel: c => ` ${c.parsed.y} days · avg of ${spPts[c.dataIndex] ? spPts[c.dataIndex].n : "?"} go-live${spPts[c.dataIndex] && spPts[c.dataIndex].n === 1 ? "" : "s"}`,
+      });
+      const spC = charts["speedChart"]; if (spC) { spC.options.plugins.lastValPrefix = "latest "; spC.update("none"); }
     } else areaChart("speedChart", Object.keys(m2c).sort().map(k => ({ m: k, v: m2c[k] })), 110, fmtMonth, viewRange);   // legacy store: monthly line
-    document.getElementById("speedCap").textContent = `Go-lives in the selected period averaged ${speedTo} days from Purchase Order to Go-Live` +
+    document.getElementById("speedCap").textContent = `Go-lives in the selected period averaged ${speedTo} days from Purchase Order to Go-Live` + (spN ? ` across ${spN} go-lives` : "") +
       (speedDelta != null ? (speedDelta < 0 ? ` · ${Math.abs(speedDelta)} days faster than the ${priorName}.` : speedDelta > 0 ? ` · ${speedDelta} days slower than the ${priorName}.` : ` · unchanged from the ${priorName}.`) : ".");
   } else {
     destroy("speedChart");
@@ -716,6 +753,7 @@ function render(store) {
   document.getElementById("stageList").innerHTML = rows.map(s =>
     `<div class="wl-row${s.st === selectedStage ? " sel" : ""}" data-stage="${s.st}" role="button" tabindex="0" aria-pressed="${s.st === selectedStage}">
       <span class="wnm" title="${s.st}">${s.st}</span>
+      <span class="wcnt" title="open implementations sitting in this stage">${s.open || 0}</span>
       <span class="wlast">${s.cur != null ? s.cur + "d" : "—"}</span>${trendBadge(s.t)}</div>`).join("");
   document.querySelectorAll("#stageList .wl-row").forEach(el => {
     const pick = () => { selectedStage = el.dataset.stage; render(loadStore()); };
@@ -758,6 +796,7 @@ function render(store) {
     + (dataThrough ? ` · data through ${fmtDay(dataThrough)}` : "") + (importedOn ? ` · imported ${fmtDay(importedOn)}` : "")
     + (store.demo ? " · SAMPLE DATA" : "");
   const dB = document.getElementById("demoBanner"); if (dB) dB.classList.toggle("hidden", !store.demo);
+  renderPendPanel(store);
   const sW = document.getElementById("stageWarn");
   if (sW) { const u = store.unknownStages || [];
     sW.classList.toggle("hidden", !u.length);
@@ -992,6 +1031,11 @@ function init() {
   document.addEventListener("click", e => {
     if (e.target && e.target.id === "importNoteX") noteHide();
     if (e.target && e.target.id === "noteBackup") document.getElementById("backup").click();
+    const pk = e.target && e.target.closest ? e.target.closest('[data-pend="1"]') : null;
+    if (pk) { pendOpen = !pendOpen; renderPendPanel(loadStore()); if (pendOpen) document.getElementById("pendPanel").scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+  });
+  document.addEventListener("keydown", e => {
+    if ((e.key === "Enter" || e.key === " ") && e.target && e.target.matches && e.target.matches('[data-pend="1"]')) { e.preventDefault(); pendOpen = !pendOpen; renderPendPanel(loadStore()); }
   });
 
   // Day-level date range inputs, populated before the first import.
