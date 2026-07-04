@@ -10,14 +10,14 @@
 <script src="vendor/html2canvas.min.js"></script>
 <style>
   :root{
-    --bg:#eef1f5; --panel:#ffffff; --ink:#1a1f2b; --muted:#6b7280; --hint:#9aa2af;
+    --bg:#eef1f5; --panel:#ffffff; --ink:#1a1f2b; --muted:#6b7280; --hint:#77808f;
     --line:#eaecef; --line2:#f1f3f5; --tile:#f5f7f9;
     --blue:#2f6ded; --blue-soft:#eaf1fe;
     --good:#15803d; --good-bg:#e7f6ec; --bad:#dc2626; --bad-bg:#fdecec;
     --cp:#2f6ded; --eb:#ea8a2f; --radius:16px; --grid:#eef1f5; --track:#e5e9ef;
   }
   html[data-theme="dark"]{
-    --bg:#0e1320; --panel:#161d2b; --ink:#e8edf5; --muted:#9aa6b8; --hint:#6a7688;
+    --bg:#0e1320; --panel:#161d2b; --ink:#e8edf5; --muted:#9aa6b8; --hint:#8b97a8;
     --line:#232c3d; --line2:#1b2331; --tile:#1b2331; --blue:#5b8cf5; --blue-soft:#1b2740;
     --good:#46d38a; --good-bg:#12312300; --good-bg:#153524; --bad:#f87171; --bad-bg:#3a1a1c;
     --cp:#5b8cf5; --eb:#f0a24e; --grid:#222a39; --track:#2a3446;
@@ -145,6 +145,8 @@
   .wl-toggle:hover{background:var(--blue-soft);color:var(--blue)}
   .wl-toggle:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
   .wl-row:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+  .kpi-note{grid-column:1/-1;font-size:11.5px;color:var(--hint);margin-top:-4px}
+  .pill.worse{text-decoration:underline;text-underline-offset:2px;text-decoration-thickness:1px}
   #stageInsights{display:flex;flex-direction:column;gap:5px;margin-top:6px}
   .ins-card{display:flex;align-items:baseline;gap:9px;width:100%;text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:8px 12px;font-size:12.5px;line-height:1.5;color:var(--muted);cursor:pointer;font-family:inherit}
   .ins-card b{color:var(--ink);font-weight:600;white-space:nowrap}
@@ -258,7 +260,7 @@
           <b>What this is</b><br><span style="color:var(--muted)">HubSpot shows you today. This dashboard shows you the trend. Import your monthly export and see how open implementations, stage times, and delivery speed are moving, and whether they're getting better or worse. The app opens with sample data so you can explore first. Your first real import replaces it.</span><br><br>
           <b>The monthly routine</b><br><span style="color:var(--muted)">1. Export all Implementation records from HubSpot. 2. Import the CSV here. 3. That's it. The dashboard updates and remembers that month, so the picture builds over time.</span><br><br>
           <b>Getting the export right</b><br><span style="color:var(--muted)">In HubSpot: CRM &rarr; Implementations &rarr; All records &rarr; Export. Choose CSV, include "All properties on records", and don't filter anything out. Open and closed both matter. Name the file implementations_YYYY-MM-DD.csv so the app knows which month it belongs to. The full field list is on the Import screen.</span><br><br>
-          <b>Reading the dashboard</b><br><span style="color:var(--muted)">The four numbers up top read at the end of your selected period, and each compares itself to the period before. Open Pipeline Trend shows whether open work is piling up or clearing. Time in Stage shows where work gets stuck. Click any stage to chart it. PO to Go-Live shows how long customers wait from Purchase Order to Go-Live. Go-Lives counts what actually shipped. The fourth number up top, Live, pending close, counts implementations that went live but haven't been moved to the Live/Complete stage in HubSpot yet. That's cleanup work waiting on someone.</span><br><br>
+          <b>Reading the dashboard</b><br><span style="color:var(--muted)">The four numbers up top read at the end of your selected period, and each compares itself to the period before. Open Pipeline Trend shows whether open work is piling up or clearing. Time in Stage shows where work gets stuck. Click any stage to chart it. PO to Go-Live shows how long customers wait from Purchase Order to Go-Live. Go-Lives counts what actually shipped. The fourth number up top, Went live, not closed out, counts implementations that went live but haven't been moved to the Live/Complete stage in HubSpot yet. That's cleanup work waiting on someone.</span><br><br>
           <b>What the colors mean</b><br><span style="color:var(--muted)">Green means improving. Red means worsening. That's the whole rule. The dotted line on each chart marks where the visible period started. Green below that line means better than the start, red above it means worse. Go-Lives bars stay neutral blue because they're a simple count. Its change pill turns green when more went live than the period before.</span><br><br>
           <b>Timeframes and comparisons</b><br><span style="color:var(--muted)">Pick a preset (1M, 3M, 6M, 1Y, All) or set exact dates. Today snaps the end date to today. The product buttons (All, CAREpoint, e-Bridge) filter the whole dashboard to one product. Every number, chart, and comparison recalculates for that period. Change pills always compare to the equal-length period right before yours. One thing to know: charts open zoomed to the most recent two weeks, while the trend pill describes the whole selected period. So the pill can say "Rising" while the zoomed view shows a recent dip. Zoom out and they'll agree.</span><br><br>
           <b>Exploring a chart</b><br><span style="color:var(--muted)">Scroll to zoom. Drag to pan. Double-click to reset. The floating bar at the bottom of each big chart does the same with buttons: zoom in and out, step back and forward through time, reset. On Time in Stage, the &#8249; handle tucks the stage list away so the chart gets the full width. Press it again to bring the list back.</span><br><br>
@@ -304,7 +306,7 @@
       </section>
 
       <section class="card" id="sec-stage" style="margin-bottom:16px">
-        <div class="row-h"><div><h3>TIME IN STAGE</h3><p class="ch-sub">How long open implementations sit in each stage · ▲ red = slowing down · ▼ green = clearing faster · vs ~30 days earlier · click a stage to chart it</p></div><div id="stageSummary" class="mktsum"></div></div>
+        <div class="row-h"><div><h3>TIME IN STAGE</h3><p class="ch-sub">How long open implementations sit in each stage · ▲ red = work sitting longer · ▼ green = clearing faster · vs ~30 days earlier · click a stage to chart it</p></div><div id="stageSummary" class="mktsum"></div></div>
         <div class="stage-wrap" id="stageWrap">
           <div class="wl" id="stageList"></div>
           <button type="button" class="wl-toggle" id="wlToggle" title="Hide stage list" aria-expanded="true" aria-controls="stageList" aria-label="Hide stage list">&#8249;</button>

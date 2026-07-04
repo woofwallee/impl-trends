@@ -30,7 +30,7 @@ const MS_PER_DAY = 86400000, STORE_KEY = "impl_trends_history_v1", THEME_KEY = "
 const CP = "#2f6ded", EB = "#ea8a2f", GOOD = "#15803d", BAD = "#dc2626", GRAY = "#9aa2af", BLUE = "#2f6ded";
 // TradingView Baseline palette, mapped to BUSINESS health (all baseline charts here are lower-is-better):
 // above the baseline = worsening (red), below = improving (green). Gray = no baseline / no change.
-const TV = { good: "#00C896", goodFill: "rgba(0,200,150,.15)", bad: "#FF4D5A", badFill: "rgba(255,77,90,.15)" };
+const TV = { good: "#00C896", goodFill: "rgba(0,200,150,.08)", bad: "#FF4D5A", badFill: "rgba(255,77,90,.08)" };
 const FLOOR_YEAR = 2025, MAX_YEAR = 2030;   // Implementation object created Aug 2025; picker scales to 2030
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const LIVE_STAGE = "Implementation Live/Complete";
@@ -192,7 +192,7 @@ function applyImport(store, records, snap) {
 
 /* ---------- helpers ---------- */
 function fmtMonth(k) { if (!k) return "—"; const [y, m] = k.split("-").map(Number); return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" }); }
-function pill(d, lowerBetter) { if (d == null) return `<span class="pill flat">no prior data</span>`; if (d === 0) return `<span class="pill flat">0</span>`;
+function pill(d, lowerBetter) { if (d == null) return `<span class="pill flat">no prior period in data</span>`; if (d === 0) return `<span class="pill flat">0</span>`;
   const down = d < 0, ok = lowerBetter ? down : !down; return `<span class="pill ${ok ? "good" : "bad"}">${down ? "&#9660;" : "&#9650;"} ${Math.abs(d)}</span>`; }
 function m4Map(store) { const m = store.m4 || {}; return m.all ? m : { all: m }; }                 // legacy stores wrap as all
 function m4Sel(store) { return m4Map(store)[cohort] || {}; }
@@ -510,7 +510,7 @@ function stageInsights(sd, sdStart, sdEnd, trends) {
 function insightText(f) {                                 // spec card templates, verbatim
   const v = f.values;
   if (f.kind === "bottleneck") return `${v.cur}d and rising · ${v.open} implementation${v.open === 1 ? "" : "s"} sitting here · the biggest drag on the pipeline`;
-  if (f.kind === "worsening") return `up ${v.delta}d vs ~30 days earlier · slowing down faster than any other stage`;
+  if (f.kind === "worsening") return `up ${v.delta}d vs ~30 days earlier · aging faster than any other stage`;
   if (f.kind === "spike") return `jumped to ${v.cur}d, well above its recent ${v.mu}d average · worth a look today`;
   if (f.kind === "improving") return v.cleared ? `cleared out completely this period` : `down ${Math.abs(v.delta)}d vs ~30 days earlier · clearing faster`;
   return "No stages need attention this period · everything is holding steady";
@@ -610,14 +610,15 @@ function render(store) {
       const val = curP ? curP.v : (pd && pd.length ? 0 : pc.length);   // window ends before the first live date -> truly 0; pc fallback is legacy-store only
       const delta = (curP && prevP) ? curP.v - prevP.v : null;
       const stale = pc.filter(p => p.days > 30).length, worst = pc.length ? pc[0].days : 0;
-      return { label: "Live, pending close", icon: '<circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/>', val,
+      return { label: "Went live, not closed out", icon: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>', val,
         pill: pill(delta, true),
         foot: atLatest ? (val ? (stale ? `${stale} waiting 30+ days · longest ${worst}d since go-live` : "none waiting long") : "no one waiting on close-out")
                        : `at end of period · vs ${priorName}` }; })(),
   ];
   document.getElementById("kpis").innerHTML = kpis.map((k, i) => `<div class="card kpi" data-share="kpi-${i}">
     <div class="kl">${k.label}<span class="ki"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px">${k.icon}</svg></span></div>
-    <div class="kv">${typeof k.val === "number" ? k.val.toLocaleString() : k.val} ${k.pill}</div><div class="kfoot">${k.foot}</div></div>`).join("");
+    <div class="kv">${typeof k.val === "number" ? k.val.toLocaleString() : k.val} ${k.pill}</div><div class="kfoot">${k.foot}</div></div>`).join("")
+    + `<div class="kpi-note">Products overlap · an implementation can be both, counted once in the total</div>`;
 
   // backlog — daily line within window, under the cohort filter
   document.getElementById("backlogNow").textContent = bl(cur).toLocaleString() + (cohort === "all" ? "" : "");
@@ -690,8 +691,8 @@ function render(store) {
     return { kind: d > 0 ? "up" : "down", d };
   }
   function trendBadge(t) {
-    if (t.kind === "up") return `<span class="pill bad">&#9650; ${t.d}d</span>`;
-    if (t.kind === "down") return `<span class="pill good">&#9660; ${Math.abs(t.d)}d</span>`;
+    if (t.kind === "up") return `<span class="pill bad worse" title="vs ~30 days earlier">&#9650; ${t.d}d</span>`;
+    if (t.kind === "down") return `<span class="pill good" title="vs ~30 days earlier">&#9660; ${Math.abs(t.d)}d</span>`;
     if (t.kind === "cleared") return `<span class="pill good">&#9660; cleared</span>`;
     if (t.kind === "flat") return `<span class="pill flat">&#9644; flat</span>`;
     if (t.kind === "new") return `<span class="pill flat">new</span>`;
@@ -781,7 +782,7 @@ const SHARE_CARDS = [
   { id: "kpi-0", label: "Open implementations (backlog) · number" },
   { id: "kpi-1", label: "CAREpoint open · number" },
   { id: "kpi-2", label: "e-Bridge open · number" },
-  { id: "kpi-3", label: "Live, pending close · number" },
+  { id: "kpi-3", label: "Went live, not closed out · number" },
   { id: "sec-backlog", label: "Open pipeline trend (backlog)" },
   { id: "sec-stage", label: "Time in stage" },
   { id: "sec-speed", label: "PO to go-live" },
