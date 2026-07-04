@@ -262,6 +262,7 @@
           <b>What the colors mean</b><br><span style="color:var(--muted)">Green means improving. Red means worsening. That's the whole rule. The dotted line on each chart marks where the visible period started. Green below that line means better than the start, red above it means worse. Go-Lives bars stay neutral blue because they're a simple count. Its change pill turns green when more went live than the period before.</span><br><br>
           <b>Timeframes and comparisons</b><br><span style="color:var(--muted)">Pick a preset (1M, 3M, 6M, 1Y, All) or set exact dates. Today snaps the end date to today. The product buttons (All, CAREpoint, e-Bridge) filter the whole dashboard to one product. Every number, chart, and comparison recalculates for that period. Change pills always compare to the equal-length period right before yours. One thing to know: charts open zoomed to the most recent two weeks, while the trend pill describes the whole selected period. So the pill can say "Rising" while the zoomed view shows a recent dip. Zoom out and they'll agree.</span><br><br>
           <b>Exploring a chart</b><br><span style="color:var(--muted)">Scroll to zoom. Drag to pan. Double-click to reset. The floating bar at the bottom of each big chart does the same with buttons: zoom in and out, step back and forward through time, reset. On Time in Stage, the &#8249; handle tucks the stage list away so the chart gets the full width. Press it again to bring the list back.</span><br><br>
+          <b>Where to look first</b><br><span style="color:var(--muted)">Under the Time in Stage chart, the app reads the selected period and surfaces up to four findings on its own: the biggest bottleneck, unusual jumps, the fastest-slowing stage, and the biggest improvement. The cards are computed from the same data as everything else and update with every import, timeframe, and product filter. Click a card to chart that stage.</span><br><br>
           <b>Why product counts can add past the total</b><br><span style="color:var(--muted)">An implementation can be both CAREpoint and e-Bridge. It counts once in the total but shows up in both product columns, so 163 + 87 can exceed a total of 217. Nothing is double-counted.</span><br><br>
           <b>Why Go-Lives bars may not match the headline</b><br><span style="color:var(--muted)">Bars show full weeks or months. If your period starts mid-month, the first bar still shows the whole month, so the bars can add past the headline. The headline is always the exact count for your dates. Trust the headline for totals, the bars for shape.</span><br><br>
           <b>Why PO to Go-Live has gaps</b><br><span style="color:var(--muted)">That chart only plots days when something went live. Quiet days aren't drawn, so points sit closer together than the calendar would suggest when you zoom in to daily detail.</span><br><br>
@@ -336,6 +337,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script src="app.js?v=16"></script>
+<script src="app.js?v=17"></script>
 </body>
 </html>
