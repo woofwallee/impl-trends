@@ -509,7 +509,7 @@ function stageInsights(sd, sdStart, sdEnd, trends) {
 }
 function insightText(f) {                                 // spec card templates, verbatim
   const v = f.values;
-  if (f.kind === "bottleneck") return `${v.cur}d and rising · ${v.open} implementation${v.open === 1 ? "" : "s"} are sitting here · the biggest drag on the pipeline right now`;
+  if (f.kind === "bottleneck") return `${v.cur}d and rising · ${v.open} implementation${v.open === 1 ? "" : "s"} sitting here · the biggest drag on the pipeline`;
   if (f.kind === "worsening") return `up ${v.delta}d vs ~30 days earlier · slowing down faster than any other stage`;
   if (f.kind === "spike") return `jumped to ${v.cur}d, well above its recent ${v.mu}d average · worth a look today`;
   if (f.kind === "improving") return v.cleared ? `cleared out completely this period` : `down ${Math.abs(v.delta)}d vs ~30 days earlier · clearing faster`;

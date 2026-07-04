@@ -145,8 +145,8 @@
   .wl-toggle:hover{background:var(--blue-soft);color:var(--blue)}
   .wl-toggle:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
   .wl-row:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
-  #stageInsights{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;margin-top:6px}
-  .ins-card{display:flex;align-items:baseline;gap:8px;text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.45;color:var(--muted);cursor:pointer;font-family:inherit}
+  #stageInsights{display:flex;flex-direction:column;gap:5px;margin-top:6px}
+  .ins-card{display:flex;align-items:baseline;gap:9px;width:100%;text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:8px 12px;font-size:12.5px;line-height:1.5;color:var(--muted);cursor:pointer;font-family:inherit}
   .ins-card b{color:var(--ink);font-weight:600;white-space:nowrap}
   .ins-card:hover{background:var(--tile)}
   .ins-card:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
@@ -337,6 +337,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script src="app.js?v=17"></script>
+<script src="app.js?v=18"></script>
 </body>
 </html>
