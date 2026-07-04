@@ -146,7 +146,7 @@
   .wl-toggle:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
   .wl-row:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
   .canvas-wrap:focus-within .tvbar{opacity:.97;pointer-events:auto}
-  .ins-go{margin-left:auto;font-size:11px;color:var(--blue);opacity:0;white-space:nowrap}
+  .ins-go{margin-left:auto;font-size:11px;color:var(--blue);opacity:.55;white-space:nowrap}
   .ins-card:hover .ins-go,.ins-card:focus-visible .ins-go{opacity:1}
   .wl-toggle .wl-lbl{writing-mode:vertical-rl;font-size:9.5px;letter-spacing:.6px;color:var(--hint);margin-top:6px}
   .mini-nav{display:none;gap:6px;margin-left:8px}
@@ -156,11 +156,15 @@
   .kpi-note{grid-column:1/-1;font-size:11.5px;color:var(--hint);margin-top:-4px}
   .kv-cap{font-size:9.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--hint);font-weight:600;margin-top:2px}
   .kv-status{font-size:21px;font-weight:700}
-  .kv-status.good{color:#00a37e}.kv-status.bad{color:#e5484d}.kv-status.flat{color:var(--muted)}
+  .kv-status.good{color:var(--good)}.kv-status.bad{color:var(--bad);text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px}.kv-status.flat{color:var(--muted)}
+  .kfoot b{color:var(--ink);font-weight:600;font-size:12.5px}
   .linky{background:none;border:none;color:var(--blue);cursor:pointer;font:inherit;font-size:inherit;padding:0;text-decoration:underline;text-underline-offset:2px}
-  .sb-grid{display:grid;grid-template-columns:1fr 110px 90px 96px 70px 100px 84px;gap:8px;align-items:center}
+  #sbTable{overflow-x:auto}
+  .sb-grid{display:grid;grid-template-columns:minmax(160px,1fr) 110px 90px 96px 70px 100px 84px;gap:8px;align-items:center;min-width:660px}
   .sb-h{padding:9px 10px 7px;border-bottom:1px solid var(--line);font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--hint);font-weight:600;cursor:pointer;user-select:none}
   .sb-h:hover{color:var(--ink)}
+  .sb-h.on{color:var(--ink)}
+  .sb-h:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
   .sb-row{padding:11px 10px;border-bottom:1px solid var(--line2);font-size:13px;cursor:pointer}
   .sb-row:hover{background:var(--tile)}
   .sb-r{text-align:right}
@@ -209,8 +213,8 @@
   .toast.show{opacity:1;transform:none}
   .toast.err{background:#7a1414}
 
-  @media(max-width:1080px){ .grid-main{grid-template-columns:1fr} .grid-kpi{grid-template-columns:repeat(2,1fr)} .stage-wrap,.stage-wrap.collapsed{grid-template-columns:1fr} .wl-toggle{display:none} .stage-wrap.collapsed .wl{visibility:visible} .wl{grid-column:1;grid-row:1;max-height:260px;overflow-y:auto;border-right:none;border-bottom:1px solid var(--line)} .chartpane{grid-column:1;grid-row:2;position:static} }
-  @media(max-width:860px){ .stage-wrap,.stage-wrap.collapsed{grid-template-columns:1fr} .wl-toggle{display:none} .stage-wrap.collapsed .wl{visibility:visible} .wl{grid-column:1;grid-row:1;max-height:260px;overflow-y:auto;border-right:none;border-bottom:1px solid var(--line)} .chartpane{grid-column:1;grid-row:2;position:static} }
+  @media(max-width:1080px){ .grid-main{grid-template-columns:1fr} .grid-kpi{grid-template-columns:repeat(2,1fr)} .stage-wrap,.stage-wrap.collapsed{grid-template-columns:1fr} .stage-wrap .wl-toggle{display:none} .stage-wrap.collapsed .wl{visibility:visible} .stage-wrap .wl{grid-column:1;grid-row:1;max-height:260px;overflow-y:auto;border-right:none;border-bottom:1px solid var(--line)} .stage-wrap .chartpane{grid-column:1;grid-row:2;position:static} }
+  @media(max-width:860px){ .stage-wrap,.stage-wrap.collapsed{grid-template-columns:1fr} .stage-wrap .wl-toggle{display:none} .stage-wrap.collapsed .wl{visibility:visible} .stage-wrap .wl{grid-column:1;grid-row:1;max-height:260px;overflow-y:auto;border-right:none;border-bottom:1px solid var(--line)} .stage-wrap .chartpane{grid-column:1;grid-row:2;position:static} }
   @media(max-width:720px){ .side{display:none} .grid-kpi{grid-template-columns:1fr} .main{padding:16px 14px 48px} .top h1{font-size:20px} .hero-n{font-size:28px} .card{padding:16px 15px} .mktsum{width:100%;margin-top:6px} .mini-nav{display:inline-flex} }
   @media(max-width:420px){ .tf button{padding:8px 8px} .chip{padding:6px 8px} .cp-h{flex-wrap:wrap} .cp-price{font-size:24px} #cpReadout{width:100%} }
   @media print{ .side,.top .tools,.tvbar{display:none!important} .main{padding:0} body{background:#fff} .card{break-inside:avoid}
@@ -226,7 +230,7 @@
     <nav class="nav">
       <a class="on" tabindex="0" data-goto="kpis"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Dashboard</a>
       <a tabindex="0" data-goto="sec-backlog"><svg class="ic" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>Open Pipeline (Backlog)</a>
-      <a tabindex="0" data-goto="sec-stage"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Stage Times</a>
+      <a tabindex="0" data-goto="sec-stage"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Time in Stage</a>
       <a tabindex="0" data-view="stagebd"><svg class="ic" viewBox="0 0 24 24"><path d="M3 5h18M3 10h18M3 15h18M3 20h12"/></svg>Stage Breakdown</a>
       <a tabindex="0" data-goto="sec-speed"><svg class="ic" viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>PO to Go-Live</a>
       <a tabindex="0" data-view="history"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 109-9 9.7 9.7 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>Import History</a>
@@ -278,9 +282,9 @@
     <div id="stagebd" class="hidden">
       <section class="card">
         <div class="row-h"><div><h3>Stage breakdown</h3><p class="ch-sub" id="sbSub"></p></div>
-        <button class="btn" id="sbBack">&larr; Back to dashboard</button></div>
+        <span><button class="btn" id="sbPng">Download PNG</button> <button class="btn" id="sbBack">&larr; Back to dashboard</button></span></div>
+        <p class="ch-sub" style="margin-bottom:10px">Trend tells you how long work sits, vs ~30 days earlier: Aging means sitting longer (bad), Clearing means moving faster (good), Emptied means nothing is left in the stage. Load tells you how heavily the backlog leans on a stage: Heavy holds 10% or more of open work, Moderate 5 to 10%, Light under 5%. Open and % of backlog are as of the latest import.</p>
         <div id="sbTable"></div>
-        <p class="ch-sub" style="margin-top:12px">Trend tells you which direction a stage is heading, vs ~30 days earlier. Load tells you how heavily the backlog leans on a stage: Heavy holds 15% or more of open work, Moderate 5 to 15%, Light under 5%. Open tells you how many implementations are sitting there. % of backlog tells you how much of your workload is concentrated there. Avg days tells you how long work has been sitting. Click a column title to sort. Click a stage to chart it on the dashboard.</p>
       </section>
     </div>
 
@@ -307,7 +311,7 @@
           <b id="ht-1">The monthly routine</b><br><span style="color:var(--muted)">1. Export all Implementation records from HubSpot. 2. Import the CSV here. 3. That's it. The dashboard updates and remembers that month, so the picture builds over time.</span><br><br>
           <b id="ht-2">Getting the export right</b><br><span style="color:var(--muted)">In HubSpot go to CRM &rarr; Implementations, open the <b>All Implementations</b> view, and clear every filter before exporting. The dashboard needs open AND completed implementations: any leftover filter (owner, stage, date) shrinks the file, skews history, and triggers the size warning on import. Then Export &rarr; file format <b>CSV</b> &rarr; include the properties <b>in your view's columns</b> (your standard 45-column view has everything; "All properties on records" also works but makes a much larger file). Name the file <b>implementations_YYYY-MM-DD.csv</b> so the app knows which month it counts as.<br><br>
           <b style="color:var(--ink)">The 10 properties that must be in the export (exact HubSpot names):</b> Record ID &middot; Implementation Name &middot; Implementation Type &middot; Implementation pipeline stage &middot; Time in current stage &middot; Date entered current stage &middot; PO Date &middot; Implementation Live/Complete &middot; Duration between PO date and Live/Complete Date &middot; Object create date/time. Also used when present: Estimated Go-Live Date (feeds the next-30-days line) and the per-stage "Date entered/exited &hellip; (Implementation Pipeline)" columns (they power Time in Stage; your view already has all of them). Every one of these names was verified against the real exports and the live pipeline on Jul 3, 2026.</span><br><br>
-          <b id="ht-3">Reading the dashboard</b><br><span style="color:var(--muted)">The four cards up top give you the trend, not the number: Rising, Steady, or Falling for open work, each product, and Go-Lives, always compared to the period before yours (within 2% counts as Steady). The small line under each verdict carries the exact count and change. The charts below hold the detail. Open Pipeline Trend shows whether open work is piling up or clearing. Time in Stage shows where work gets stuck; click any stage to chart it. The Stage Breakdown page in the sidebar grades every stage at once: Trend tells you which direction it's heading, Load tells you how heavily the backlog leans on it (Heavy holds 15%+ of open work), and every column sorts on click. PO to Go-Live shows how long customers wait from Purchase Order to Go-Live. Go-Lives counts what actually shipped. Implementations that went live but haven't been moved to the Live/Complete stage in HubSpot are cleanup work waiting on someone. The Go-Lives chart shows a "went live but not closed out" link when any exist; click it to see exactly which implementations are waiting, by name. The count next to each stage in Time in Stage is how many implementations are sitting there right now, and the line under the pipeline chart shows how many started, how many closed out, and the net change for your period.</span><br><br>
+          <b id="ht-3">Reading the dashboard</b><br><span style="color:var(--muted)">The four cards up top give you the trend, not the number: Rising, Steady, or Falling for open work, each product, and Go-Lives, always compared to the period before yours (within 2% counts as Steady). The small line under each verdict carries the exact count and change. The charts below hold the detail. Open Pipeline Trend shows whether open work is piling up or clearing. Time in Stage shows where work gets stuck; click any stage to chart it. The Stage Breakdown page in the sidebar grades every stage at once: Trend tells you how long work sits (Aging = sitting longer, Clearing = moving faster), Load tells you how heavily the backlog leans on it (Heavy holds 10%+ of open work), and every column sorts on click. PO to Go-Live shows how long customers wait from Purchase Order to Go-Live. Go-Lives counts what actually shipped. Implementations that went live but haven't been moved to the Live/Complete stage in HubSpot are cleanup work waiting on someone. The Go-Lives chart shows a "went live but not closed out" link when any exist; click it to see exactly which implementations are waiting, by name. The count next to each stage in Time in Stage is how many implementations are sitting there right now, and the line under the pipeline chart shows how many started, how many closed out, and the net change for your period.</span><br><br>
           <b id="ht-4">What the colors mean</b><br><span style="color:var(--muted)">Green means improving. Red means worsening. That's the whole rule. The dotted line on each chart marks where the visible period started. Green below that line means better than the start, red above it means worse. Go-Lives bars stay neutral blue because they're a simple count. Its change pill turns green when more went live than the period before.</span><br><br>
           <b id="ht-5">Timeframes and comparisons</b><br><span style="color:var(--muted)">Pick a preset (Last month, 1M, 3M, 6M, 1Y, All) or set exact dates. The app opens on the last full calendar month and remembers your choice next time. Today snaps the end date to the most recent data day. The product buttons (All, CAREpoint, e-Bridge) filter the whole dashboard to one product. Every number, chart, and comparison recalculates for that period. Change pills always compare to the equal-length period right before yours. Charts show exactly the period you selected, so the trend pill and the line always describe the same window. Zoom in for detail any time.</span><br><br>
           <b id="ht-6">Exploring a chart</b><br><span style="color:var(--muted)">Hold Ctrl (or ⌘ on Mac) and scroll to zoom, so normal page scrolling never moves a chart. Drag to pan. Double-click to reset. The floating bar at the bottom of each big chart does the same with buttons: zoom in and out, step back and forward through time, reset. On Time in Stage, the &#8249; handle tucks the stage list away so the chart gets the full width. Press it again to bring the list back.</span><br><br>
@@ -361,7 +365,7 @@
         <div class="row-h"><div><h3>TIME IN STAGE</h3><p class="ch-sub">How long open implementations sit in each stage · ▲ red = work sitting longer · ▼ green = clearing faster · % change vs ~30 days earlier, hover for days · click a stage to chart it</p></div><div id="stageSummary" class="mktsum"></div></div>
         <div class="stage-wrap" id="stageWrap">
           <div class="wl">
-            <div class="wl-hdr" id="wlHdr"><span>Stage</span><span class="h-r" title="open implementations sitting in the stage">Open</span><span class="h-r" title="average days implementations have been sitting in the stage">Days &#9662;</span><span class="h-r" title="percent change vs ~30 days earlier">vs ~30d</span></div>
+            <div class="wl-hdr" id="wlHdr"><span>Stage</span><span class="h-r" title="open implementations sitting in the stage">Open</span><span class="h-r" title="average days implementations have been sitting in the stage · list is sorted by this, slowest first">Days</span><span class="h-r" title="percent change vs ~30 days earlier">vs ~30d</span></div>
             <div id="stageList"></div>
           </div>
           <button type="button" class="wl-toggle" id="wlToggle" title="Hide stage list" aria-expanded="true" aria-controls="stageList" aria-label="Hide stage list">&#8249;</button>
@@ -394,6 +398,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script src="app.js?v=27"></script>
+<script src="app.js?v=28"></script>
 </body>
 </html>
