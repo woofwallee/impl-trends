@@ -145,6 +145,15 @@
   .wl-toggle:hover{background:var(--blue-soft);color:var(--blue)}
   .wl-toggle:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
   .wl-row:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+  #stageInsights{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;margin-top:6px}
+  .ins-card{display:flex;align-items:baseline;gap:8px;text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.45;color:var(--muted);cursor:pointer;font-family:inherit}
+  .ins-card b{color:var(--ink);font-weight:600;white-space:nowrap}
+  .ins-card:hover{background:var(--tile)}
+  .ins-card:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+  .ins-card.flat{cursor:default}
+  .ins-card.flat:hover{background:var(--panel)}
+  .ins-dot{width:8px;height:8px;border-radius:50%;flex:none;align-self:center}
+  .ins-dot.red{background:#FF4D5A}.ins-dot.amber{background:#f0a24e}.ins-dot.green{background:#00C896}.ins-dot.flat{background:#9aa2af}
   .wl{border-right:1px solid var(--line)}
   .wl-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line2);cursor:pointer}
   .wl-row:last-child{border-bottom:none}
@@ -253,6 +262,7 @@
           <b>What the colors mean</b><br><span style="color:var(--muted)">Green means improving. Red means worsening. That's the whole rule. The dotted line on each chart marks where the visible period started. Green below that line means better than the start, red above it means worse. Go-Lives bars stay neutral blue because they're a simple count. Its change pill turns green when more went live than the period before.</span><br><br>
           <b>Timeframes and comparisons</b><br><span style="color:var(--muted)">Pick a preset (1M, 3M, 6M, 1Y, All) or set exact dates. Today snaps the end date to today. The product buttons (All, CAREpoint, e-Bridge) filter the whole dashboard to one product. Every number, chart, and comparison recalculates for that period. Change pills always compare to the equal-length period right before yours. One thing to know: charts open zoomed to the most recent two weeks, while the trend pill describes the whole selected period. So the pill can say "Rising" while the zoomed view shows a recent dip. Zoom out and they'll agree.</span><br><br>
           <b>Exploring a chart</b><br><span style="color:var(--muted)">Scroll to zoom. Drag to pan. Double-click to reset. The floating bar at the bottom of each big chart does the same with buttons: zoom in and out, step back and forward through time, reset. On Time in Stage, the &#8249; handle tucks the stage list away so the chart gets the full width. Press it again to bring the list back.</span><br><br>
+          <b>Where to look first</b><br><span style="color:var(--muted)">Under the Time in Stage chart, the app reads the selected period and surfaces up to four findings on its own: the biggest bottleneck, unusual jumps, the fastest-slowing stage, and the biggest improvement. The cards are computed from the same data as everything else and update with every import, timeframe, and product filter. Click a card to chart that stage.</span><br><br>
           <b>Why product counts can add past the total</b><br><span style="color:var(--muted)">An implementation can be both CAREpoint and e-Bridge. It counts once in the total but shows up in both product columns, so 163 + 87 can exceed a total of 217. Nothing is double-counted.</span><br><br>
           <b>Why Go-Lives bars may not match the headline</b><br><span style="color:var(--muted)">Bars show full weeks or months. If your period starts mid-month, the first bar still shows the whole month, so the bars can add past the headline. The headline is always the exact count for your dates. Trust the headline for totals, the bars for shape.</span><br><br>
           <b>Why PO to Go-Live has gaps</b><br><span style="color:var(--muted)">That chart only plots days when something went live. Quiet days aren't drawn, so points sit closer together than the calendar would suggest when you zoom in to daily detail.</span><br><br>
@@ -302,6 +312,8 @@
             <div class="cp-h"><span class="cp-name" id="cpName">—</span><span class="cp-price" id="cpPrice">—</span><span id="cpBadge"></span><span id="cpReadout" style="color:var(--muted);font-size:13px"></span></div>
             <p class="ch-sub" id="cpSub">Avg days in this stage over time · hover to read a day · scroll to zoom · drag to pan · double-click to reset</p>
             <div class="canvas-wrap" style="height:300px;margin-top:10px"><canvas id="stageBig"></canvas></div>
+            <div class="colhdr" style="grid-template-columns:1fr;margin-top:14px">Where to look first · computed from the selected period</div>
+            <div id="stageInsights"></div>
           </div>
         </div>
       </section>
@@ -325,6 +337,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script src="app.js?v=16"></script>
+<script src="app.js?v=17"></script>
 </body>
 </html>

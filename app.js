@@ -463,6 +463,67 @@ function windowTrend(vals) {                             // direction of the vis
   return { kind: b > a ? "up" : "down" };
 }
 
+/* Stage Insights Panel (spec: docs/specs/2026-07-03-stage-insights-panel-design.md).
+   Pure + deterministic: ranked candidates per detector, greedy assembly with per-stage dedup. */
+function stageInsights(sd, sdStart, sdEnd, trends) {
+  const stages = CONFIG.pipelineStages.filter(s => s !== LIVE_STAGE && (sd.series || {})[s]);
+  const arr = s => sd.series[s] || [];
+  const cur = s => { const a = arr(s); return sdEnd >= 0 && a[sdEnd] != null ? a[sdEnd] : null; };
+  const t = s => trends[s] || { kind: "empty" };
+  const rising = stages.filter(s => t(s).kind === "up");
+
+  const bottleneck = rising.filter(s => cur(s) != null)
+    .map(s => { const c = cur(s), o = (sd.open || {})[s] || 0; return { s, cur: c, open: o, score: o ? c * o : c }; })
+    .sort((a, b) => b.score - a.score || b.open - a.open || b.cur - a.cur);
+
+  const spikes = stages.map(s => {
+    const c = cur(s); if (c == null) return null;
+    const a = arr(s), base = [];
+    for (let i = sdEnd - 1; i >= sdStart && base.length < 14; i--) if (a[i] != null) base.push(a[i]);
+    if (base.length < 5) return null;
+    const mu = base.reduce((x, y) => x + y, 0) / base.length;
+    const sg = Math.sqrt(base.reduce((x, y) => x + (y - mu) * (y - mu), 0) / base.length);
+    if (c - mu < Math.max(2.5 * sg, 5)) return null;
+    return { s, cur: c, mu: Math.round(mu), z: (c - mu) / Math.max(sg, 1) };
+  }).filter(Boolean).sort((a, b) => b.z - a.z);
+
+  const worsening = rising.map(s => ({ s, d: t(s).d, cur: cur(s) ?? -1 }))
+    .sort((a, b) => b.d - a.d || b.cur - a.cur);
+
+  const improving = stages.map(s => {
+    const tr = t(s);
+    if (tr.kind === "down") return { s, d: tr.d, mag: -tr.d, cleared: false };
+    if (tr.kind === "cleared") { const a = arr(s); let last = 0; for (let i = sdEnd; i >= sdStart; i--) if (a[i] != null) { last = a[i]; break; } return { s, d: null, mag: last, cleared: true }; }
+    return null;
+  }).filter(Boolean).sort((a, b) => b.mag - a.mag);
+
+  const used = new Set(), out = [];
+  const take = (list, mk) => { for (const c of list) { if (used.has(c.s)) continue; used.add(c.s); out.push(mk(c)); return; } };
+  take(bottleneck, c => ({ kind: "bottleneck", stage: c.s, severity: "red", values: { cur: c.cur, open: c.open } }));
+  take(spikes, c => ({ kind: "spike", stage: c.s, severity: "red", values: { cur: c.cur, mu: c.mu } }));
+  take(worsening, c => ({ kind: "worsening", stage: c.s, severity: "amber", values: { delta: c.d, cur: c.cur } }));
+  take(improving, c => ({ kind: "improving", stage: c.s, severity: "green", values: { delta: c.d, cleared: c.cleared } }));
+  const rank = { red: 0, amber: 1, green: 2 };
+  const res = out.slice(0, 4).sort((a, b) => rank[a.severity] - rank[b.severity]);
+  return res.length ? res : [{ kind: "none", stage: null, severity: "flat", values: {} }];
+}
+function insightText(f) {                                 // spec card templates, verbatim
+  const v = f.values;
+  if (f.kind === "bottleneck") return `${v.cur}d and rising · ${v.open} implementation${v.open === 1 ? "" : "s"} are sitting here · the biggest drag on the pipeline right now`;
+  if (f.kind === "worsening") return `up ${v.delta}d vs ~30 days earlier · slowing down faster than any other stage`;
+  if (f.kind === "spike") return `jumped to ${v.cur}d, well above its recent ${v.mu}d average · worth a look today`;
+  if (f.kind === "improving") return v.cleared ? `cleared out completely this period` : `down ${Math.abs(v.delta)}d vs ~30 days earlier · clearing faster`;
+  return "No stages need attention this period · everything is holding steady";
+}
+function renderInsights(findings) {
+  const box = document.getElementById("stageInsights"); if (!box) return;
+  box.innerHTML = findings.map(f => f.kind === "none"
+    ? `<div class="ins-card flat"><span class="ins-dot flat"></span><span>${insightText(f)}</span></div>`
+    : `<button type="button" class="ins-card" data-stage="${f.stage}"><span class="ins-dot ${f.severity}"></span><b>${f.stage}</b><span>${insightText(f)}</span></button>`).join("");
+  box.querySelectorAll("button.ins-card").forEach(b =>
+    b.addEventListener("click", () => { selectedStage = b.dataset.stage; render(loadStore()); }));
+}
+
 /* ---------- render ---------- */
 function render(store) {
   const dash = document.getElementById("dashboard"), empty = document.getElementById("empty");
@@ -671,7 +732,8 @@ function render(store) {
     const syncLeave = el.onmouseleave;                    // compose: crosshair-sync clear + readout reset
     el.onmouseleave = e => { if (syncLeave) syncLeave(e);
       document.getElementById("cpPrice").textContent = sel.cur != null ? sel.cur + "d" : "—"; document.getElementById("cpReadout").textContent = ""; };
-  }
+    renderInsights(stageInsights(sd, sdStart, sdEnd, Object.fromEntries(rows.map(r => [r.st, r.t]))));
+  } else { const box = document.getElementById("stageInsights"); if (box) box.innerHTML = ""; }
 
   const up = rows.filter(s => s.t.kind === "up").length;
   const down = rows.filter(s => s.t.kind === "down" || s.t.kind === "cleared").length;
