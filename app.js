@@ -15,13 +15,15 @@ const CONFIG = {
   durationColsMs: ["time_in_current_stage", "duration_po_to_live"],
   typeLabels: { "CAREpoint": ["carepoint", "cp3"], "e-Bridge": ["e-bridge", "ebridge"] },
   filenameDateRegex: /(\d{4})-(\d{2})-\d{2}/,
-  // Full Implementation Pipeline (ordered). Panel always shows every stage; update if HubSpot changes stages.
+  // Live Implementation Pipeline (ordered) — verified against HubSpot 2026-07-03 (15 stages).
+  // "Pending Sales Purchase Review" and "Waiting on GD" were deleted in HubSpot and their
+  // stage-date columns never carry data in the property family this app parses.
   pipelineStages: [
-    "Not Started", "Pending Sales Purchase Review", "Pending Kickoff Call",
+    "Not Started", "Pending Kickoff Call",
     "Pending Technical Readiness", "Pending Server Tour", "Pending Server/Remote Access",
     "Pending Software Installation", "Software Installation Completed", "Network Testing",
     "Network Testing Completed", "In Progress", "In Training", "Waiting on Customer",
-    "Waiting on GD", "On-hold", "Go-Live Scheduled", "Implementation Live/Complete",
+    "On-hold", "Go-Live Scheduled", "Implementation Live/Complete",
   ],
 };
 const MS_PER_DAY = 86400000, STORE_KEY = "impl_trends_history_v1", THEME_KEY = "impl_trends_theme";
