@@ -507,6 +507,22 @@ function stageInsights(sd, sdStart, sdEnd, trends) {
   const res = out.slice(0, 4).sort((a, b) => rank[a.severity] - rank[b.severity]);
   return res.length ? res : [{ kind: "none", stage: null, severity: "flat", values: {} }];
 }
+function insightText(f) {                                 // spec card templates, verbatim
+  const v = f.values;
+  if (f.kind === "bottleneck") return `${v.cur}d and rising · ${v.open} implementation${v.open === 1 ? "" : "s"} are sitting here · the biggest drag on the pipeline right now`;
+  if (f.kind === "worsening") return `up ${v.delta}d vs ~30 days earlier · slowing down faster than any other stage`;
+  if (f.kind === "spike") return `jumped to ${v.cur}d, well above its recent ${v.mu}d average · worth a look today`;
+  if (f.kind === "improving") return v.cleared ? `cleared out completely this period` : `down ${Math.abs(v.delta)}d vs ~30 days earlier · clearing faster`;
+  return "No stages need attention this period · everything is holding steady";
+}
+function renderInsights(findings) {
+  const box = document.getElementById("stageInsights"); if (!box) return;
+  box.innerHTML = findings.map(f => f.kind === "none"
+    ? `<div class="ins-card flat"><span class="ins-dot flat"></span><span>${insightText(f)}</span></div>`
+    : `<button type="button" class="ins-card" data-stage="${f.stage}"><span class="ins-dot ${f.severity}"></span><b>${f.stage}</b><span>${insightText(f)}</span></button>`).join("");
+  box.querySelectorAll("button.ins-card").forEach(b =>
+    b.addEventListener("click", () => { selectedStage = b.dataset.stage; render(loadStore()); }));
+}
 
 /* ---------- render ---------- */
 function render(store) {
@@ -716,7 +732,8 @@ function render(store) {
     const syncLeave = el.onmouseleave;                    // compose: crosshair-sync clear + readout reset
     el.onmouseleave = e => { if (syncLeave) syncLeave(e);
       document.getElementById("cpPrice").textContent = sel.cur != null ? sel.cur + "d" : "—"; document.getElementById("cpReadout").textContent = ""; };
-  }
+    renderInsights(stageInsights(sd, sdStart, sdEnd, Object.fromEntries(rows.map(r => [r.st, r.t]))));
+  } else { const box = document.getElementById("stageInsights"); if (box) box.innerHTML = ""; }
 
   const up = rows.filter(s => s.t.kind === "up").length;
   const down = rows.filter(s => s.t.kind === "down" || s.t.kind === "cleared").length;
