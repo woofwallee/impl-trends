@@ -507,12 +507,12 @@ function stageInsights(sd, sdStart, sdEnd, trends) {
     return { s, cur: c, mu: Math.round(mu), z: (c - mu) / Math.max(sg, 1) };
   }).filter(Boolean).sort((a, b) => b.z - a.z);
 
-  const worsening = rising.map(s => ({ s, d: t(s).d, cur: cur(s) ?? -1 }))
+  const worsening = rising.map(s => ({ s, d: t(s).d, pct: t(s).pct, cur: cur(s) ?? -1 }))
     .sort((a, b) => b.d - a.d || b.cur - a.cur);
 
   const improving = stages.map(s => {
     const tr = t(s);
-    if (tr.kind === "down") return { s, d: tr.d, mag: -tr.d, cleared: false };
+    if (tr.kind === "down") return { s, d: tr.d, pct: tr.pct, mag: -tr.d, cleared: false };
     if (tr.kind === "cleared") { const a = arr(s); let last = 0; for (let i = sdEnd; i >= sdStart; i--) if (a[i] != null) { last = a[i]; break; } return { s, d: null, mag: last, cleared: true }; }
     return null;
   }).filter(Boolean).sort((a, b) => b.mag - a.mag);
@@ -521,8 +521,8 @@ function stageInsights(sd, sdStart, sdEnd, trends) {
   const take = (list, mk) => { for (const c of list) { if (used.has(c.s)) continue; used.add(c.s); out.push(mk(c)); return; } };
   take(bottleneck, c => ({ kind: "bottleneck", stage: c.s, severity: "red", values: { cur: c.cur, open: c.open } }));
   take(spikes, c => ({ kind: "spike", stage: c.s, severity: "red", values: { cur: c.cur, mu: c.mu } }));
-  take(worsening, c => ({ kind: "worsening", stage: c.s, severity: "amber", values: { delta: c.d, cur: c.cur } }));
-  take(improving, c => ({ kind: "improving", stage: c.s, severity: "green", values: { delta: c.d, cleared: c.cleared } }));
+  take(worsening, c => ({ kind: "worsening", stage: c.s, severity: "amber", values: { delta: c.d, pct: c.pct == null ? null : Math.round(c.pct), cur: c.cur } }));
+  take(improving, c => ({ kind: "improving", stage: c.s, severity: "green", values: { delta: c.d, pct: c.pct == null ? null : Math.round(c.pct), cleared: c.cleared } }));
   const rank = { red: 0, amber: 1, green: 2 };
   const res = out.slice(0, 4).sort((a, b) => rank[a.severity] - rank[b.severity]);
   return res.length ? res : [{ kind: "none", stage: null, severity: "flat", values: {} }];
@@ -530,9 +530,9 @@ function stageInsights(sd, sdStart, sdEnd, trends) {
 function insightText(f) {                                 // spec card templates, verbatim
   const v = f.values;
   if (f.kind === "bottleneck") return `${v.cur}d and rising · ${v.open} implementation${v.open === 1 ? "" : "s"} sitting here · the biggest drag on the pipeline`;
-  if (f.kind === "worsening") return `up ${v.delta}d vs ~30 days earlier · aging faster than any other stage`;
+  if (f.kind === "worsening") return `up ${v.delta}d${v.pct != null ? ` (${Math.abs(v.pct)}%)` : ""} vs ~30 days earlier · aging faster than any other stage`;
   if (f.kind === "spike") return `jumped to ${v.cur}d, well above its recent ${v.mu}d average · worth a look today`;
-  if (f.kind === "improving") return v.cleared ? `cleared out completely this period` : `down ${Math.abs(v.delta)}d vs ~30 days earlier · clearing faster`;
+  if (f.kind === "improving") return v.cleared ? `cleared out completely this period` : `down ${Math.abs(v.delta)}d${v.pct != null ? ` (${Math.abs(v.pct)}%)` : ""} vs ~30 days earlier · clearing faster`;
   return "No stages need attention this period · everything is holding steady";
 }
 let pendOpen = false;                                     // session-only; resets on refresh like the collapse state
@@ -743,13 +743,15 @@ function render(store) {
     for (let i = target; i >= sdStart; i--) if (a[i] != null) { prev = a[i]; break; }
     if (prev == null) for (let i = target + 1; i < sdEnd; i++) if (a[i] != null) { prev = a[i]; break; }
     if (prev == null) return { kind: "new" };
-    const d = cur - prev, pct = prev ? d / prev * 100 : 0;
-    if (Math.abs(pct) < 10) return { kind: "flat", d };
-    return { kind: d > 0 ? "up" : "down", d };
+    const d = cur - prev, pct = prev ? d / prev * 100 : null;
+    if (Math.abs(pct == null ? 0 : pct) < 10 && pct != null) return { kind: "flat", d, pct };
+    if (pct == null && d === 0) return { kind: "flat", d, pct };
+    return { kind: d > 0 ? "up" : "down", d, pct };
   }
   function trendBadge(t) {
-    if (t.kind === "up") return `<span class="pill bad worse" title="vs ~30 days earlier">&#9650; ${t.d}d</span>`;
-    if (t.kind === "down") return `<span class="pill good" title="vs ~30 days earlier">&#9660; ${Math.abs(t.d)}d</span>`;
+    const pctTxt = t.pct == null ? null : Math.round(Math.abs(t.pct)) + "%";
+    if (t.kind === "up") return `<span class="pill bad worse" title="up ${t.d}d vs ~30 days earlier">&#9650; ${pctTxt != null ? pctTxt : t.d + "d"}</span>`;
+    if (t.kind === "down") return `<span class="pill good" title="down ${Math.abs(t.d)}d vs ~30 days earlier">&#9660; ${pctTxt != null ? pctTxt : Math.abs(t.d) + "d"}</span>`;
     if (t.kind === "cleared") return `<span class="pill good">&#9660; cleared</span>`;
     if (t.kind === "flat") return `<span class="pill flat">&#9644; flat</span>`;
     if (t.kind === "new") return `<span class="pill flat">new</span>`;
