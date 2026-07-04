@@ -41,7 +41,7 @@ function syncWlToggle() {
   const w = document.getElementById("stageWrap"), b = document.getElementById("wlToggle");
   if (!w || !b) return;
   w.classList.toggle("collapsed", wlCollapsed);
-  b.innerHTML = wlCollapsed ? "&#8250;" : "&#8249;";
+  b.innerHTML = wlCollapsed ? '&#8250;<span class="wl-lbl">Stages</span>' : "&#8249;";
   b.title = wlCollapsed ? "Show stage list" : "Hide stage list";
   b.setAttribute("aria-expanded", String(!wlCollapsed));
   b.setAttribute("aria-label", b.title);
@@ -350,10 +350,12 @@ function tvRebase(c) {                                    // after a viewport ch
   }
   c.update("none");
 }
+const MODK = typeof navigator !== "undefined" && /Mac/.test(navigator.platform || "") ? "meta" : "ctrl";
+const MODLBL = MODK === "meta" ? "\u2318" : "Ctrl";
 function tvZoom(n) { return {
   limits: { x: { min: 0, max: Math.max(0, n - 1), minRange: 1 } },   // pan/zoom stays within the data
   pan: { enabled: true, mode: "x", onPanComplete: ({ chart }) => tvRebase(chart) },
-  zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: "x", onZoomComplete: ({ chart }) => tvRebase(chart) },
+  zoom: { wheel: { enabled: true, modifierKey: MODK }, pinch: { enabled: true }, mode: "x", onZoomComplete: ({ chart }) => tvRebase(chart) },
 }; }
 const XGROUP = ["backlogChart", "speedChart", "goliveChart", "stageBig"];
 const XSYNC = { date: null, src: null };
@@ -390,6 +392,13 @@ function tvToolbar(id) {                                  // TV-style chart tool
   wrap.appendChild(bar);
 }
 
+const CHART_NAMES = { backlogChart: "Open pipeline trend", speedChart: "PO to Go-Live", stageBig: "Time in stage detail", goliveChart: "Go-lives per period" };
+function chartAria(id, pts) {
+  const el = document.getElementById(id); if (!el) return;
+  let last = null; for (let i = pts.length - 1; i >= 0; i--) if (pts[i].v != null) { last = pts[i]; break; }
+  el.setAttribute("role", "img");
+  el.setAttribute("aria-label", (CHART_NAMES[id] || id) + (last ? ` chart · latest value ${last.v} on ${last.m}` : " chart · no data"));
+}
 function areaChart(id, pts, height, labelFmt, vp, opts) { // the ONE baseline-chart implementation (shared by all three)
   labelFmt = labelFmt || fmtMonth; opts = opts || {};
   destroy(id); const el = document.getElementById(id); if (!el) return; const tc = themeColors();
@@ -408,6 +417,7 @@ function areaChart(id, pts, height, labelFmt, vp, opts) { // the ONE baseline-ch
         y: { position: "right", min: yb.min, max: yb.max, grid: { color: tc.grid, drawBorder: false }, ticks: { color: tc.tick, maxTicksLimit: 5 } } } },
     plugins: [crosshair, baseLine, lastValue, tvClip] });
   tvAttach(id, true);
+  chartAria(id, pts);
 }
 function barChart(id, pts, fmt, bucket, vp) {
   fmt = fmt || fmtMonth; bucket = bucket || "month";
@@ -416,13 +426,14 @@ function barChart(id, pts, fmt, bucket, vp) {
   charts[id] = new Chart(el, { type: "bar",
     data: { labels, datasets: [{ data: pts.map(p => p.v), backgroundColor: tc.line, borderRadius: 5, borderSkipped: false, barPercentage: .7, categoryPercentage: .8 }] },
     options: { animation: false, responsive: true, maintainAspectRatio: false, devicePixelRatio: Math.max(window.devicePixelRatio || 1, 2), interaction: { mode: "index", intersect: false },
-      plugins: { legend: { display: false }, tooltip: { animation: false, callbacks: { title: c => (bucket === "week" ? "Week of " : "") + fmt(c[0].label), label: c => ` ${c.parsed.y} go-live${c.parsed.y === 1 ? "" : "s"}` } }, zoom: tvZoom(labels.length) },
+      plugins: { legend: { display: false }, tooltip: { animation: false, callbacks: { title: c => (bucket === "week" ? "Week of " : "") + fmt(c[0].label), label: c => ` ${c.parsed.y} go-live${c.parsed.y === 1 ? "" : "s"}` } } },
       scales: { x: { min: i0, max: i1, grid: { display: false }, ticks: { color: tc.tick, maxRotation: 0, autoSkip: true, maxTicksLimit: 7, callback: function (v) { const l = this.getLabelForValue(v);
           if (bucket === "month") { const [y, m] = String(l).split("-").map(Number); return MONTHS[m - 1] + " " + String(y).slice(2); }   // "Oct 25", matching the other charts
           return fmt(l).replace(/, \d+$/, ""); } } },
         y: { grid: { color: tc.grid, drawBorder: false }, ticks: { color: tc.tick, maxTicksLimit: 5, precision: 0 }, beginAtZero: true } } },
     plugins: [crosshair] });
-  tvAttach(id, false);                                    // GO-LIVES: gestures + sync, but no controller overlay
+  tvAttach(id, false);                                    // GO-LIVES: crosshair sync only — a report line, not an explorer
+  chartAria(id, pts);
 }
 
 // Crosshair: on the hovered chart it tracks the tooltip; on the other charts in the group it
@@ -539,7 +550,7 @@ function renderInsights(findings) {
   const box = document.getElementById("stageInsights"); if (!box) return;
   box.innerHTML = findings.map(f => f.kind === "none"
     ? `<div class="ins-card flat"><span class="ins-dot flat"></span><span>${insightText(f)}</span></div>`
-    : `<button type="button" class="ins-card" data-stage="${f.stage}"><span class="ins-dot ${f.severity}"></span><b>${f.stage}</b><span>${insightText(f)}</span></button>`).join("");
+    : `<button type="button" class="ins-card" data-stage="${f.stage}"><span class="ins-dot ${f.severity}"></span><b>${f.stage}</b><span>${insightText(f)}</span><span class="ins-go">chart it &#8594;</span></button>`).join("");
   box.querySelectorAll("button.ins-card").forEach(b =>
     b.addEventListener("click", () => { selectedStage = b.dataset.stage; render(loadStore()); }));
 }
@@ -769,7 +780,7 @@ function render(store) {
   if (sel && sdDays.length) {
     // Same baseline-chart implementation as OPEN PIPELINE TREND / PO TO GO-LIVE (areaChart), full daily history.
     const fullArr = stageArr(sel.st);
-    document.getElementById("cpSub").textContent = "Daily detail · hover to read · scroll to zoom · drag to pan · double-click to reset";
+    document.getElementById("cpSub").textContent = `Daily detail · hover to read · ${MODLBL} + scroll to zoom · drag to pan · double-click to reset`;
     areaChart("stageBig", sdDays.map((d, i) => ({ m: d, v: fullArr[i] })), 300, fmtDay, viewRange, {
       tooltipLabel: c => c.parsed.y == null ? " no open work" : ` ${c.parsed.y} days`,
       onHover: (e, els) => { const c = charts["stageBig"]; if (!c) return; const pr = document.getElementById("cpPrice"), ro = document.getElementById("cpReadout");
@@ -1029,6 +1040,8 @@ function init() {
   });
   document.addEventListener("keydown", e => { if (e.key === "Escape") closeMenus(); });
   document.addEventListener("click", e => {
+    const mv = e.target && e.target.closest ? e.target.closest(".mini-nav [data-view]") : null;
+    if (mv) showView(mv.dataset.view);
     if (e.target && e.target.id === "importNoteX") noteHide();
     if (e.target && e.target.id === "noteBackup") document.getElementById("backup").click();
     const pk = e.target && e.target.closest ? e.target.closest('[data-pend="1"]') : null;
