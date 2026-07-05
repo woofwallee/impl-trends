@@ -1,0 +1,70 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>engine-db parity test</title></head>
+<body><pre id="out">running…</pre>
+<script type="module">
+import { GD_CONFIG } from './config.js';
+import { initEngine, buildDashboardDb } from './engine-db.js';
+
+const norm = v => {
+  if (typeof v === 'number' && Number.isInteger(v)) return v;
+  if (typeof v === 'number' && Number.isFinite(v) && Math.floor(v) === v) return Math.floor(v);
+  if (Array.isArray(v)) return v.map(norm);
+  if (v && typeof v === 'object') { const o = {}; for (const k of Object.keys(v)) o[k] = norm(v[k]); return o; }
+  return v === undefined ? null : v;
+};
+const diff = (a, b, path = '', out = []) => {
+  a = norm(a); b = norm(b);
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) out.push(`${path}: len ${a.length} vs ${b.length}`);
+    a.forEach((x, i) => diff(x, b[i], `${path}[${i}]`, out));
+  } else if (a && b && typeof a === 'object' && typeof b === 'object') {
+    for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) diff(a[k], b[k], `${path}.${k}`, out);
+  } else if (a !== b) out.push(`${path}: oracle=${JSON.stringify(a)} sql=${JSON.stringify(b)}`);
+  return out;
+};
+// same CSV parse + adapter the app uses (duplicated here so the test stands alone)
+const parseCSV = t => { const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < t.length; i++) { const c = t[i];
+    if (q) { if (c === '"') { if (t[i+1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+    else if (c === '"') q = true; else if (c === ',') { row.push(f); f = ''; }
+    else if (c === '\n') { row.push(f); rows.push(row); row = []; f = ''; } else if (c !== '\r') f += c; }
+  if (f.length || row.length) { row.push(f); rows.push(row); }
+  const h = rows[0].map(x => x.trim());
+  return rows.slice(1).filter(r => r.some(v => v && v.trim())).map(r => Object.fromEntries(h.map((k, i) => [k, (r[i] || '').trim()]))); };
+const pd = s => { if (!s || !String(s).trim()) return null; const d = new Date(String(s).trim()); return isNaN(d) ? null : d; };
+const STAGE_COLS = [...GD_CONFIG.stages, GD_CONFIG.terminal];
+const toRecords = rows => rows.map(r => { const events = {};
+  for (const s of STAGE_COLS) { const en = pd(r[`Date entered "${s} (Implementation Pipeline)"`]);
+    const ex = pd(r[`Date exited "${s} (Implementation Pipeline)"`]); if (en || ex) events[s] = { enter: en, exit: ex }; }
+  const cs = r['Implementation pipeline stage'] || '';
+  if (cs && !events[cs]) events[cs] = { enter: pd(r['Date entered current stage']), exit: null };
+  const t = r['Implementation Type'] || '';
+  return { id: r['Record ID'], name: r['Implementation Name'] || r['Record ID'],
+    product: t.includes(';') ? 'Both' : t, currentStage: cs, events,
+    poDate: pd(r['PO Date']), liveDate: pd(r['Implementation Live/Complete']) }; });
+
+const out = document.getElementById('out');
+try {
+  const oracle = await (await fetch('demo-oracle.json')).json();
+  const records = toRecords(parseCSV(await (await fetch('sample-data.csv')).text()));
+  await initEngine();
+  let failures = 0;
+  // COVERAGE NOTE: demo values stay small (<2^32) and non-negative, so this test
+  // does not exercise multi-word or negative 128-bit conversions in num(); those
+  // are covered by code review of the vendored Arrow bn.mjs (exact, throws past
+  // 2^53), not by this suite.
+  // TWO passes over the cases: the app calls the shim 12x per import on ONE connection
+  // (3 cohorts x 4 periods), so a second pass must produce identical results — this
+  // catches stale-table / re-registered-file bugs before the app is wired.
+  for (const pass of [1, 2]) for (const c of oracle.cases) {
+    const recs = records.filter(r => c.cohort === 'all' || r.product === c.cohort || r.product === 'Both');
+    const now = new Date(oracle.now);
+    const got = await buildDashboardDb(recs, GD_CONFIG, now, new Date(oracle.now - c.days * 86400000), null);
+    got.view.execBand.snapshotDate = null;
+    const d = diff(c.expected, { view: got.view, items: got.items, snapshot: got.snapshot });
+    out.textContent += `\n${c.label} (pass ${pass}): ${d.length ? 'FAIL\n  ' + d.slice(0, 10).join('\n  ') : 'PASS'}`;
+    failures += d.length ? 1 : 0;
+  }
+  out.textContent += failures ? '\nRESULT: FAIL' : '\nRESULT: ALL PASS';
+  document.title = failures ? 'FAIL' : 'ALL PASS';
+} catch (e) { out.textContent = 'ERROR: ' + (e && e.message || e); document.title = 'FAIL'; }
+</script></body></html>
