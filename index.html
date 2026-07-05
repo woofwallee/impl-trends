@@ -268,7 +268,7 @@
   .empty-ic{width:34px;height:34px;stroke:var(--blue);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;margin-bottom:8px}
   .empty .big{font-size:19px;color:var(--ink);font-weight:600;margin-bottom:6px}
   .empty-lead{font-size:13px;color:var(--muted);line-height:1.55;margin:0 auto 18px;max-width:370px}
-  .empty-actions{display:flex;gap:8px;justify-content:center}
+  .empty-actions{display:flex;gap:8px;justify-content:center;margin-top:18px}
   .empty-fields{margin-top:20px;text-align:left;font-size:12px}
   .empty-fields>summary{cursor:pointer;color:var(--ink);text-align:center;font-weight:500}
   .empty-fields .ef-body{margin-top:10px;color:var(--muted);line-height:1.6}
@@ -406,8 +406,7 @@
     <div id="empty" class="empty">
       <div class="empty-card">
         <svg class="empty-ic" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
-        <div class="big">Import your HubSpot export</div>
-        <p class="empty-lead">Export your Implementation records from HubSpot as CSV and drop the file here. Each monthly import builds the trend over time.</p>
+        <div class="big">Upload HubSpot File</div>
         <div class="empty-actions"><button class="btn primary" id="importBtn2">Import CSV</button><button class="btn" id="demoBtn">Load sample data</button></div>
         <details class="empty-fields"><summary>Required fields &amp; assumptions</summary>
           <div class="ef-body">
@@ -416,7 +415,6 @@
           <b>Assumptions:</b> one row per implementation · durations are raw milliseconds · dates are YYYY-MM-DD or MM/DD/YYYY · Type contains "CAREpoint" / "e-Bridge" (both = counted in both) · Live/Complete date = went live · Live/Complete stage = left the pipeline.
           </div>
         </details>
-        <div class="empty-foot">Everything runs in your browser · nothing is uploaded</div>
       </div>
     </div>
 
@@ -471,6 +469,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script type="module" src="app.js?v=42"></script>
+<script type="module" src="app.js?v=43"></script>
 </body>
 </html>

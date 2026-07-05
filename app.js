@@ -791,7 +791,7 @@ function render(store) {
   const pcN = pcAll.filter(p => cohort === "all" || (p.types || []).includes(cohort)).length;
   document.getElementById("goliveCap").innerHTML = pcN ? (() => { const pcF = pcAll.filter(p => cohort === "all" || (p.types || []).includes(cohort));
         const oldest = pcF.length ? pcF[0].days : 0, stale = pcF.filter(p => p.days > 30).length;
-        return `<button type="button" class="linky" data-pend="1">${pcN} went live but not closed out (all time)${stale ? ` · ${stale} waiting 30+ days` : ""} · oldest ${oldest}d · view list</button>`; })() : "";
+        return `${pcN} went live but not closed out (all time)${stale ? ` · ${stale} waiting 30+ days` : ""} · oldest ${oldest}d · <button type="button" class="linky" data-pend="1">view list</button>`; })() : "";
   document.getElementById("breakdown").style.display = cohort === "all" ? "" : "none";
   const bdTot = cur.total || 1;
   document.getElementById("breakdown").innerHTML = [

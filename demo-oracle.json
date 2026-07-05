@@ -11,25 +11,25 @@
       "snapshotDate": null,
       "open": 217,
       "openDelta": null,
-      "concentrationPct": 95,
-      "totalExcess": 412,
+      "concentrationPct": 94,
+      "totalExcess": 254,
       "prevExcess": null,
       "topDrags": [
        {
+        "stage": "Pending Technical Readiness",
+        "excess": 121
+       },
+       {
+        "stage": "Pending Kickoff Call",
+        "excess": 70
+       },
+       {
         "stage": "Pending Server/Remote Access",
-        "excess": 282
-       },
-       {
-        "stage": "Pending Server Tour",
-        "excess": 75
-       },
-       {
-        "stage": "Network Testing",
-        "excess": 34
+        "excess": 48
        }
       ],
       "intakeState": "behind",
-      "arrivals": 249,
+      "arrivals": 258,
       "departs": 143,
       "systemic": "intake-surge",
       "goLives": 24,
@@ -38,55 +38,50 @@
      },
      "focusRows": [
       {
+       "stage": "Pending Technical Readiness",
+       "excess": 121,
+       "countPastNormal": 13,
+       "normal": 30,
+       "oldest": 45,
+       "owner": "customer",
+       "key": "aging"
+      },
+      {
+       "stage": "Pending Kickoff Call",
+       "excess": 70,
+       "countPastNormal": 14,
+       "normal": 24,
+       "oldest": 33,
+       "owner": "customer",
+       "key": "aging"
+      },
+      {
        "stage": "Pending Server/Remote Access",
-       "excess": 282,
-       "countPastNormal": 18,
+       "excess": 48,
+       "countPastNormal": 7,
        "normal": 33,
-       "oldest": 72,
+       "oldest": 45,
        "owner": "customer",
        "key": "aging"
       },
       {
        "stage": "Pending Server Tour",
-       "excess": 75,
-       "countPastNormal": 11,
+       "excess": 15,
+       "countPastNormal": 5,
        "normal": 21,
-       "oldest": 34,
+       "oldest": 26,
        "owner": "customer",
-       "key": "aging"
-      },
-      {
-       "stage": "Network Testing",
-       "excess": 34,
-       "countPastNormal": 2,
-       "normal": 31,
-       "oldest": 54,
-       "owner": "team",
-       "key": "aging"
-      },
-      {
-       "stage": "In Progress",
-       "excess": 16,
-       "countPastNormal": 2,
-       "normal": 35,
-       "oldest": 43,
-       "owner": "team",
-       "key": "building"
-      },
-      {
-       "stage": "Not Started",
-       "excess": 3,
-       "countPastNormal": 1,
-       "normal": 22,
-       "oldest": 25,
-       "owner": "team",
        "key": "building"
       }
      ],
-     "actFirst": [
-      "Network Testing"
-     ],
+     "actFirst": [],
      "buildingRows": [
+      {
+       "stage": "In Progress",
+       "net": 27,
+       "arrivals": 32,
+       "departs": 5
+      },
       {
        "stage": "Not Started",
        "net": 18,
@@ -100,15 +95,9 @@
        "departs": 10
       },
       {
-       "stage": "In Progress",
-       "net": 17,
-       "arrivals": 22,
-       "departs": 5
-      },
-      {
-       "stage": "Pending Kickoff Call",
-       "net": 14,
-       "arrivals": 29,
+       "stage": "Pending Server Tour",
+       "net": 13,
+       "arrivals": 28,
        "departs": 15
       },
       {
@@ -124,15 +113,15 @@
        "departs": 0
       },
       {
-       "stage": "Pending Technical Readiness",
-       "net": 8,
-       "arrivals": 29,
-       "departs": 21
+       "stage": "Network Testing",
+       "net": 4,
+       "arrivals": 18,
+       "departs": 14
       },
       {
        "stage": "In Training",
-       "net": 4,
-       "arrivals": 8,
+       "net": 3,
+       "arrivals": 7,
        "departs": 4
       }
      ],
@@ -146,51 +135,51 @@
        "n": 124,
        "normal": 22,
        "p95": 38,
-       "oldest": 25,
-       "excess": 3,
+       "oldest": 13,
+       "excess": 0,
        "net": 18,
        "owner": "team"
       },
       {
        "order": 2,
        "stage": "Pending Kickoff Call",
-       "key": "building",
-       "verdict": "Backlog building",
+       "key": "aging",
+       "verdict": "Aging",
        "wip": 18,
        "n": 113,
        "normal": 24,
        "p95": 35,
-       "oldest": 25,
-       "excess": 2,
-       "net": 14,
+       "oldest": 33,
+       "excess": 70,
+       "net": 10,
        "owner": "customer"
       },
       {
        "order": 3,
        "stage": "Pending Technical Readiness",
-       "key": "building",
-       "verdict": "Backlog building",
+       "key": "aging",
+       "verdict": "Aging",
        "wip": 25,
        "n": 97,
        "normal": 30,
        "p95": 47,
-       "oldest": 26,
-       "excess": 0,
-       "net": 8,
+       "oldest": 45,
+       "excess": 121,
+       "net": -5,
        "owner": "customer"
       },
       {
        "order": 4,
        "stage": "Pending Server Tour",
-       "key": "aging",
-       "verdict": "Aging",
+       "key": "building",
+       "verdict": "Backlog building",
        "wip": 19,
        "n": 84,
        "normal": 21,
        "p95": 28,
-       "oldest": 34,
-       "excess": 75,
-       "net": 8,
+       "oldest": 26,
+       "excess": 15,
+       "net": 13,
        "owner": "customer"
       },
       {
@@ -202,9 +191,9 @@
        "n": 67,
        "normal": 33,
        "p95": 38,
-       "oldest": 72,
-       "excess": 282,
-       "net": -1,
+       "oldest": 45,
+       "excess": 48,
+       "net": 9,
        "owner": "customer"
       },
       {
@@ -216,7 +205,7 @@
        "n": 74,
        "normal": 34,
        "p95": 43,
-       "oldest": 2,
+       "oldest": 12,
        "excess": 0,
        "net": 1,
        "owner": "team"
@@ -230,7 +219,7 @@
        "n": 63,
        "normal": 33,
        "p95": 42,
-       "oldest": 24,
+       "oldest": 13,
        "excess": 0,
        "net": 17,
        "owner": "team"
@@ -238,15 +227,15 @@
       {
        "order": 8,
        "stage": "Network Testing",
-       "key": "aging",
-       "verdict": "Aging",
+       "key": "building",
+       "verdict": "Backlog building",
        "wip": 6,
        "n": 53,
        "normal": 31,
        "p95": 44,
-       "oldest": 54,
-       "excess": 34,
-       "net": 2,
+       "oldest": 13,
+       "excess": 0,
+       "net": 4,
        "owner": "team"
       },
       {
@@ -258,7 +247,7 @@
        "n": 63,
        "normal": 34,
        "p95": 40,
-       "oldest": 5,
+       "oldest": 23,
        "excess": 0,
        "net": 9,
        "owner": "team"
@@ -272,9 +261,9 @@
        "n": 31,
        "normal": 35,
        "p95": 56,
-       "oldest": 43,
-       "excess": 16,
-       "net": 17,
+       "oldest": 13,
+       "excess": 0,
+       "net": 27,
        "owner": "team"
       },
       {
@@ -286,9 +275,9 @@
        "n": 28,
        "normal": 40,
        "p95": 59,
-       "oldest": 34,
+       "oldest": 33,
        "excess": 0,
-       "net": 4,
+       "net": 3,
        "owner": "team"
       },
       {
@@ -300,7 +289,7 @@
        "n": 35,
        "normal": 45,
        "p95": 54,
-       "oldest": 4,
+       "oldest": 14,
        "excess": 0,
        "net": -1,
        "owner": "customer"
@@ -314,7 +303,7 @@
        "n": 28,
        "normal": 36,
        "p95": 54,
-       "oldest": 18,
+       "oldest": 13,
        "excess": 0,
        "net": 1,
        "owner": "customer"
@@ -328,7 +317,7 @@
        "n": 33,
        "normal": 38,
        "p95": 50,
-       "oldest": 13,
+       "oldest": 28,
        "excess": 0,
        "net": 9,
        "owner": "team"
@@ -339,123 +328,68 @@
     "items": {
      "Not Started": [
       {
-       "name": "Implementation 33000023",
-       "product": "CAREpoint",
-       "age": 25
-      },
-      {
-       "name": "Implementation 33000018",
-       "product": "CAREpoint",
-       "age": 22
-      },
-      {
-       "name": "Implementation 33000003",
-       "product": "CAREpoint",
-       "age": 17
-      },
-      {
-       "name": "Implementation 33000009",
-       "product": "CAREpoint",
-       "age": 17
-      },
-      {
-       "name": "Implementation 33000026",
-       "product": "e-Bridge",
-       "age": 16
-      },
-      {
-       "name": "Implementation 33000029",
-       "product": "e-Bridge",
-       "age": 14
-      },
-      {
-       "name": "Implementation 33000004",
-       "product": "e-Bridge",
-       "age": 13
-      },
-      {
-       "name": "Implementation 33000012",
-       "product": "CAREpoint",
-       "age": 13
-      },
-      {
-       "name": "Implementation 33000020",
-       "product": "e-Bridge",
-       "age": 13
-      },
-      {
-       "name": "Implementation 33000022",
-       "product": "CAREpoint",
-       "age": 13
-      },
-      {
-       "name": "Implementation 33000028",
-       "product": "CAREpoint",
-       "age": 13
-      },
-      {
-       "name": "Implementation 33000005",
-       "product": "e-Bridge",
-       "age": 12
-      },
-      {
-       "name": "Implementation 33000024",
-       "product": "Both",
-       "age": 12
-      },
-      {
-       "name": "Implementation 33000002",
-       "product": "CAREpoint",
-       "age": 11
-      },
-      {
        "name": "Implementation 33000011",
        "product": "CAREpoint",
-       "age": 11
+       "age": 13
       },
       {
-       "name": "Implementation 33000025",
+       "name": "Implementation 33000023",
        "product": "CAREpoint",
-       "age": 11
-      },
-      {
-       "name": "Implementation 33000027",
-       "product": "Both",
-       "age": 11
-      },
-      {
-       "name": "Implementation 33000006",
-       "product": "e-Bridge",
-       "age": 10
+       "age": 13
       },
       {
        "name": "Implementation 33000010",
        "product": "CAREpoint",
-       "age": 10
+       "age": 12
+      },
+      {
+       "name": "Implementation 33000022",
+       "product": "CAREpoint",
+       "age": 12
+      },
+      {
+       "name": "Implementation 33000009",
+       "product": "CAREpoint",
+       "age": 11
+      },
+      {
+       "name": "Implementation 33000021",
+       "product": "CAREpoint",
+       "age": 11
       },
       {
        "name": "Implementation 33000008",
        "product": "CAREpoint",
-       "age": 8
+       "age": 10
       },
       {
-       "name": "Implementation 33000014",
-       "product": "CAREpoint",
-       "age": 8
+       "name": "Implementation 33000020",
+       "product": "e-Bridge",
+       "age": 10
       },
       {
-       "name": "Implementation 33000016",
+       "name": "Implementation 33000007",
        "product": "CAREpoint",
-       "age": 8
+       "age": 9
       },
       {
        "name": "Implementation 33000019",
        "product": "CAREpoint",
+       "age": 9
+      },
+      {
+       "name": "Implementation 33000006",
+       "product": "e-Bridge",
        "age": 8
       },
       {
-       "name": "Implementation 33000015",
+       "name": "Implementation 33000018",
        "product": "CAREpoint",
+       "age": 8
+      },
+      {
+       "name": "Implementation 33000005",
+       "product": "e-Bridge",
        "age": 7
       },
       {
@@ -464,9 +398,54 @@
        "age": 7
       },
       {
-       "name": "Implementation 33000021",
+       "name": "Implementation 33000029",
+       "product": "e-Bridge",
+       "age": 7
+      },
+      {
+       "name": "Implementation 33000004",
+       "product": "e-Bridge",
+       "age": 6
+      },
+      {
+       "name": "Implementation 33000016",
+       "product": "CAREpoint",
+       "age": 6
+      },
+      {
+       "name": "Implementation 33000028",
+       "product": "CAREpoint",
+       "age": 6
+      },
+      {
+       "name": "Implementation 33000003",
        "product": "CAREpoint",
        "age": 5
+      },
+      {
+       "name": "Implementation 33000015",
+       "product": "CAREpoint",
+       "age": 5
+      },
+      {
+       "name": "Implementation 33000027",
+       "product": "Both",
+       "age": 5
+      },
+      {
+       "name": "Implementation 33000002",
+       "product": "CAREpoint",
+       "age": 4
+      },
+      {
+       "name": "Implementation 33000014",
+       "product": "CAREpoint",
+       "age": 4
+      },
+      {
+       "name": "Implementation 33000026",
+       "product": "e-Bridge",
+       "age": 4
       },
       {
        "name": "Implementation 33000001",
@@ -474,181 +453,216 @@
        "age": 3
       },
       {
-       "name": "Implementation 33000007",
-       "product": "CAREpoint",
-       "age": 1
-      },
-      {
        "name": "Implementation 33000013",
        "product": "CAREpoint",
-       "age": 1
+       "age": 3
+      },
+      {
+       "name": "Implementation 33000025",
+       "product": "CAREpoint",
+       "age": 3
+      },
+      {
+       "name": "Implementation 33000012",
+       "product": "CAREpoint",
+       "age": 2
+      },
+      {
+       "name": "Implementation 33000024",
+       "product": "Both",
+       "age": 2
       }
      ],
      "Pending Kickoff Call": [
+      {
+       "name": "Implementation 33000161",
+       "product": "CAREpoint",
+       "age": 33
+      },
+      {
+       "name": "Implementation 33000160",
+       "product": "e-Bridge",
+       "age": 32
+      },
+      {
+       "name": "Implementation 33000159",
+       "product": "CAREpoint",
+       "age": 31
+      },
+      {
+       "name": "Implementation 33000172",
+       "product": "e-Bridge",
+       "age": 31
+      },
+      {
+       "name": "Implementation 33000158",
+       "product": "CAREpoint",
+       "age": 30
+      },
+      {
+       "name": "Implementation 33000171",
+       "product": "e-Bridge",
+       "age": 30
+      },
+      {
+       "name": "Implementation 33000157",
+       "product": "CAREpoint",
+       "age": 29
+      },
+      {
+       "name": "Implementation 33000170",
+       "product": "Both",
+       "age": 29
+      },
+      {
+       "name": "Implementation 33000156",
+       "product": "CAREpoint",
+       "age": 28
+      },
+      {
+       "name": "Implementation 33000169",
+       "product": "e-Bridge",
+       "age": 28
+      },
+      {
+       "name": "Implementation 33000155",
+       "product": "CAREpoint",
+       "age": 27
+      },
+      {
+       "name": "Implementation 33000168",
+       "product": "Both",
+       "age": 27
+      },
+      {
+       "name": "Implementation 33000167",
+       "product": "CAREpoint",
+       "age": 26
+      },
       {
        "name": "Implementation 33000166",
        "product": "e-Bridge",
        "age": 25
       },
       {
-       "name": "Implementation 33000169",
-       "product": "e-Bridge",
-       "age": 25
-      },
-      {
-       "name": "Implementation 33000168",
-       "product": "Both",
-       "age": 23
-      },
-      {
-       "name": "Implementation 33000167",
-       "product": "CAREpoint",
-       "age": 20
-      },
-      {
-       "name": "Implementation 33000160",
-       "product": "e-Bridge",
-       "age": 19
-      },
-      {
        "name": "Implementation 33000165",
        "product": "e-Bridge",
-       "age": 19
-      },
-      {
-       "name": "Implementation 33000158",
-       "product": "CAREpoint",
-       "age": 18
-      },
-      {
-       "name": "Implementation 33000156",
-       "product": "CAREpoint",
-       "age": 16
-      },
-      {
-       "name": "Implementation 33000162",
-       "product": "CAREpoint",
-       "age": 15
-      },
-      {
-       "name": "Implementation 33000157",
-       "product": "CAREpoint",
-       "age": 14
-      },
-      {
-       "name": "Implementation 33000172",
-       "product": "e-Bridge",
-       "age": 13
-      },
-      {
-       "name": "Implementation 33000161",
-       "product": "CAREpoint",
-       "age": 11
-      },
-      {
-       "name": "Implementation 33000163",
-       "product": "e-Bridge",
-       "age": 10
-      },
-      {
-       "name": "Implementation 33000171",
-       "product": "e-Bridge",
-       "age": 8
-      },
-      {
-       "name": "Implementation 33000155",
-       "product": "CAREpoint",
-       "age": 7
-      },
-      {
-       "name": "Implementation 33000170",
-       "product": "Both",
-       "age": 7
-      },
-      {
-       "name": "Implementation 33000159",
-       "product": "CAREpoint",
-       "age": 2
+       "age": 24
       },
       {
        "name": "Implementation 33000164",
        "product": "CAREpoint",
-       "age": 2
+       "age": 23
+      },
+      {
+       "name": "Implementation 33000163",
+       "product": "e-Bridge",
+       "age": 22
+      },
+      {
+       "name": "Implementation 33000162",
+       "product": "CAREpoint",
+       "age": 21
       }
      ],
      "Pending Technical Readiness": [
       {
-       "name": "Implementation 33000092",
-       "product": "e-Bridge",
-       "age": 26
+       "name": "Implementation 33000095",
+       "product": "CAREpoint",
+       "age": 45
       },
       {
        "name": "Implementation 33000094",
        "product": "CAREpoint",
-       "age": 25
-      },
-      {
-       "name": "Implementation 33000096",
-       "product": "CAREpoint",
-       "age": 23
-      },
-      {
-       "name": "Implementation 33000103",
-       "product": "CAREpoint",
-       "age": 23
-      },
-      {
-       "name": "Implementation 33000108",
-       "product": "CAREpoint",
-       "age": 23
-      },
-      {
-       "name": "Implementation 33000089",
-       "product": "CAREpoint",
-       "age": 22
-      },
-      {
-       "name": "Implementation 33000098",
-       "product": "CAREpoint",
-       "age": 22
-      },
-      {
-       "name": "Implementation 33000102",
-       "product": "e-Bridge",
-       "age": 21
-      },
-      {
-       "name": "Implementation 33000088",
-       "product": "e-Bridge",
-       "age": 20
-      },
-      {
-       "name": "Implementation 33000101",
-       "product": "CAREpoint",
-       "age": 17
-      },
-      {
-       "name": "Implementation 33000087",
-       "product": "Both",
-       "age": 16
-      },
-      {
-       "name": "Implementation 33000105",
-       "product": "CAREpoint",
-       "age": 16
-      },
-      {
-       "name": "Implementation 33000091",
-       "product": "CAREpoint",
-       "age": 14
+       "age": 44
       },
       {
        "name": "Implementation 33000093",
        "product": "Both",
-       "age": 14
+       "age": 43
       },
       {
-       "name": "Implementation 33000095",
+       "name": "Implementation 33000092",
+       "product": "e-Bridge",
+       "age": 42
+      },
+      {
+       "name": "Implementation 33000091",
+       "product": "CAREpoint",
+       "age": 41
+      },
+      {
+       "name": "Implementation 33000090",
+       "product": "CAREpoint",
+       "age": 40
+      },
+      {
+       "name": "Implementation 33000089",
+       "product": "CAREpoint",
+       "age": 39
+      },
+      {
+       "name": "Implementation 33000088",
+       "product": "e-Bridge",
+       "age": 38
+      },
+      {
+       "name": "Implementation 33000087",
+       "product": "Both",
+       "age": 37
+      },
+      {
+       "name": "Implementation 33000099",
+       "product": "CAREpoint",
+       "age": 37
+      },
+      {
+       "name": "Implementation 33000098",
+       "product": "CAREpoint",
+       "age": 36
+      },
+      {
+       "name": "Implementation 33000097",
+       "product": "CAREpoint",
+       "age": 35
+      },
+      {
+       "name": "Implementation 33000096",
+       "product": "CAREpoint",
+       "age": 34
+      },
+      {
+       "name": "Implementation 33000111",
+       "product": "e-Bridge",
+       "age": 20
+      },
+      {
+       "name": "Implementation 33000110",
+       "product": "Both",
+       "age": 19
+      },
+      {
+       "name": "Implementation 33000109",
+       "product": "e-Bridge",
+       "age": 18
+      },
+      {
+       "name": "Implementation 33000108",
+       "product": "CAREpoint",
+       "age": 17
+      },
+      {
+       "name": "Implementation 33000107",
+       "product": "CAREpoint",
+       "age": 16
+      },
+      {
+       "name": "Implementation 33000106",
+       "product": "e-Bridge",
+       "age": 15
+      },
+      {
+       "name": "Implementation 33000105",
        "product": "CAREpoint",
        "age": 14
       },
@@ -658,86 +672,31 @@
        "age": 13
       },
       {
-       "name": "Implementation 33000110",
-       "product": "Both",
-       "age": 13
-      },
-      {
-       "name": "Implementation 33000097",
+       "name": "Implementation 33000103",
        "product": "CAREpoint",
        "age": 12
       },
       {
-       "name": "Implementation 33000111",
+       "name": "Implementation 33000102",
        "product": "e-Bridge",
-       "age": 12
+       "age": 11
+      },
+      {
+       "name": "Implementation 33000101",
+       "product": "CAREpoint",
+       "age": 10
       },
       {
        "name": "Implementation 33000100",
        "product": "Both",
-       "age": 10
-      },
-      {
-       "name": "Implementation 33000106",
-       "product": "e-Bridge",
-       "age": 10
-      },
-      {
-       "name": "Implementation 33000107",
-       "product": "CAREpoint",
        "age": 9
-      },
-      {
-       "name": "Implementation 33000109",
-       "product": "e-Bridge",
-       "age": 9
-      },
-      {
-       "name": "Implementation 33000090",
-       "product": "CAREpoint",
-       "age": 8
-      },
-      {
-       "name": "Implementation 33000099",
-       "product": "CAREpoint",
-       "age": 6
       }
      ],
      "Pending Server Tour": [
       {
-       "name": "Implementation 33000145",
+       "name": "Implementation 33000154",
        "product": "CAREpoint",
-       "age": 34
-      },
-      {
-       "name": "Implementation 33000143",
-       "product": "e-Bridge",
-       "age": 33
-      },
-      {
-       "name": "Implementation 33000141",
-       "product": "CAREpoint",
-       "age": 32
-      },
-      {
-       "name": "Implementation 33000144",
-       "product": "e-Bridge",
-       "age": 31
-      },
-      {
-       "name": "Implementation 33000147",
-       "product": "e-Bridge",
-       "age": 31
-      },
-      {
-       "name": "Implementation 33000142",
-       "product": "e-Bridge",
-       "age": 28
-      },
-      {
-       "name": "Implementation 33000139",
-       "product": "CAREpoint",
-       "age": 25
+       "age": 26
       },
       {
        "name": "Implementation 33000153",
@@ -745,146 +704,111 @@
        "age": 25
       },
       {
-       "name": "Implementation 33000140",
-       "product": "e-Bridge",
-       "age": 23
-      },
-      {
-       "name": "Implementation 33000138",
-       "product": "e-Bridge",
-       "age": 22
-      },
-      {
-       "name": "Implementation 33000148",
-       "product": "e-Bridge",
-       "age": 22
-      },
-      {
-       "name": "Implementation 33000146",
-       "product": "Both",
-       "age": 20
-      },
-      {
        "name": "Implementation 33000152",
        "product": "CAREpoint",
-       "age": 19
-      },
-      {
-       "name": "Implementation 33000150",
-       "product": "CAREpoint",
-       "age": 18
-      },
-      {
-       "name": "Implementation 33000154",
-       "product": "CAREpoint",
-       "age": 18
-      },
-      {
-       "name": "Implementation 33000149",
-       "product": "CAREpoint",
-       "age": 17
-      },
-      {
-       "name": "Implementation 33000137",
-       "product": "CAREpoint",
-       "age": 12
+       "age": 24
       },
       {
        "name": "Implementation 33000151",
        "product": "CAREpoint",
-       "age": 12
+       "age": 23
+      },
+      {
+       "name": "Implementation 33000150",
+       "product": "CAREpoint",
+       "age": 22
+      },
+      {
+       "name": "Implementation 33000143",
+       "product": "e-Bridge",
+       "age": 20
+      },
+      {
+       "name": "Implementation 33000142",
+       "product": "e-Bridge",
+       "age": 19
+      },
+      {
+       "name": "Implementation 33000141",
+       "product": "CAREpoint",
+       "age": 18
+      },
+      {
+       "name": "Implementation 33000140",
+       "product": "e-Bridge",
+       "age": 17
+      },
+      {
+       "name": "Implementation 33000139",
+       "product": "CAREpoint",
+       "age": 16
+      },
+      {
+       "name": "Implementation 33000138",
+       "product": "e-Bridge",
+       "age": 15
+      },
+      {
+       "name": "Implementation 33000137",
+       "product": "CAREpoint",
+       "age": 14
       },
       {
        "name": "Implementation 33000136",
        "product": "e-Bridge",
+       "age": 13
+      },
+      {
+       "name": "Implementation 33000149",
+       "product": "CAREpoint",
        "age": 10
+      },
+      {
+       "name": "Implementation 33000148",
+       "product": "e-Bridge",
+       "age": 9
+      },
+      {
+       "name": "Implementation 33000147",
+       "product": "e-Bridge",
+       "age": 8
+      },
+      {
+       "name": "Implementation 33000146",
+       "product": "Both",
+       "age": 7
+      },
+      {
+       "name": "Implementation 33000145",
+       "product": "CAREpoint",
+       "age": 6
+      },
+      {
+       "name": "Implementation 33000144",
+       "product": "e-Bridge",
+       "age": 5
       }
      ],
      "Pending Server/Remote Access": [
       {
-       "name": "Implementation 33000070",
+       "name": "Implementation 33000083",
        "product": "CAREpoint",
-       "age": 72
-      },
-      {
-       "name": "Implementation 33000081",
-       "product": "Both",
-       "age": 67
-      },
-      {
-       "name": "Implementation 33000060",
-       "product": "CAREpoint",
-       "age": 61
-      },
-      {
-       "name": "Implementation 33000058",
-       "product": "e-Bridge",
-       "age": 60
-      },
-      {
-       "name": "Implementation 33000085",
-       "product": "e-Bridge",
-       "age": 56
-      },
-      {
-       "name": "Implementation 33000073",
-       "product": "CAREpoint",
-       "age": 52
+       "age": 45
       },
       {
        "name": "Implementation 33000082",
        "product": "CAREpoint",
-       "age": 49
+       "age": 44
       },
       {
-       "name": "Implementation 33000061",
-       "product": "e-Bridge",
-       "age": 46
-      },
-      {
-       "name": "Implementation 33000066",
-       "product": "e-Bridge",
-       "age": 46
-      },
-      {
-       "name": "Implementation 33000071",
+       "name": "Implementation 33000081",
        "product": "Both",
-       "age": 46
-      },
-      {
-       "name": "Implementation 33000083",
-       "product": "CAREpoint",
-       "age": 46
-      },
-      {
-       "name": "Implementation 33000074",
-       "product": "CAREpoint",
        "age": 43
       },
       {
        "name": "Implementation 33000080",
        "product": "e-Bridge",
-       "age": 43
-      },
-      {
-       "name": "Implementation 33000062",
-       "product": "CAREpoint",
-       "age": 40
-      },
-      {
-       "name": "Implementation 33000075",
-       "product": "CAREpoint",
-       "age": 40
-      },
-      {
-       "name": "Implementation 33000079",
-       "product": "CAREpoint",
-       "age": 37
-      },
-      {
-       "name": "Implementation 33000059",
-       "product": "CAREpoint",
-       "age": 36
+       "age": 42
       },
       {
        "name": "Implementation 33000086",
@@ -892,494 +816,559 @@
        "age": 36
       },
       {
-       "name": "Implementation 33000077",
-       "product": "CAREpoint",
-       "age": 32
+       "name": "Implementation 33000085",
+       "product": "e-Bridge",
+       "age": 35
       },
       {
        "name": "Implementation 33000084",
        "product": "CAREpoint",
-       "age": 32
+       "age": 34
       },
       {
-       "name": "Implementation 33000078",
-       "product": "e-Bridge",
-       "age": 26
-      },
-      {
-       "name": "Implementation 33000065",
-       "product": "Both",
-       "age": 24
-      },
-      {
-       "name": "Implementation 33000067",
+       "name": "Implementation 33000070",
        "product": "CAREpoint",
-       "age": 24
+       "age": 33
       },
       {
        "name": "Implementation 33000069",
        "product": "CAREpoint",
-       "age": 22
-      },
-      {
-       "name": "Implementation 33000064",
-       "product": "e-Bridge",
-       "age": 20
-      },
-      {
-       "name": "Implementation 33000063",
-       "product": "Both",
-       "age": 17
-      },
-      {
-       "name": "Implementation 33000072",
-       "product": "CAREpoint",
-       "age": 17
-      },
-      {
-       "name": "Implementation 33000076",
-       "product": "e-Bridge",
-       "age": 12
+       "age": 32
       },
       {
        "name": "Implementation 33000068",
        "product": "CAREpoint",
-       "age": 10
+       "age": 31
+      },
+      {
+       "name": "Implementation 33000067",
+       "product": "CAREpoint",
+       "age": 30
+      },
+      {
+       "name": "Implementation 33000066",
+       "product": "e-Bridge",
+       "age": 29
+      },
+      {
+       "name": "Implementation 33000079",
+       "product": "CAREpoint",
+       "age": 29
+      },
+      {
+       "name": "Implementation 33000065",
+       "product": "Both",
+       "age": 28
+      },
+      {
+       "name": "Implementation 33000078",
+       "product": "e-Bridge",
+       "age": 28
+      },
+      {
+       "name": "Implementation 33000064",
+       "product": "e-Bridge",
+       "age": 27
+      },
+      {
+       "name": "Implementation 33000077",
+       "product": "CAREpoint",
+       "age": 27
+      },
+      {
+       "name": "Implementation 33000063",
+       "product": "Both",
+       "age": 26
+      },
+      {
+       "name": "Implementation 33000076",
+       "product": "e-Bridge",
+       "age": 26
+      },
+      {
+       "name": "Implementation 33000062",
+       "product": "CAREpoint",
+       "age": 25
+      },
+      {
+       "name": "Implementation 33000075",
+       "product": "CAREpoint",
+       "age": 25
+      },
+      {
+       "name": "Implementation 33000061",
+       "product": "e-Bridge",
+       "age": 24
+      },
+      {
+       "name": "Implementation 33000074",
+       "product": "CAREpoint",
+       "age": 24
+      },
+      {
+       "name": "Implementation 33000060",
+       "product": "CAREpoint",
+       "age": 23
+      },
+      {
+       "name": "Implementation 33000073",
+       "product": "CAREpoint",
+       "age": 23
+      },
+      {
+       "name": "Implementation 33000059",
+       "product": "CAREpoint",
+       "age": 22
+      },
+      {
+       "name": "Implementation 33000072",
+       "product": "CAREpoint",
+       "age": 22
+      },
+      {
+       "name": "Implementation 33000058",
+       "product": "e-Bridge",
+       "age": 21
+      },
+      {
+       "name": "Implementation 33000071",
+       "product": "Both",
+       "age": 21
       }
      ],
      "Pending Software Installation": [
       {
-       "name": "Implementation 33000209",
-       "product": "e-Bridge",
-       "age": 2
-      },
-      {
-       "name": "Implementation 33000210",
-       "product": "CAREpoint",
-       "age": 2
-      },
-      {
-       "name": "Implementation 33000212",
-       "product": "CAREpoint",
-       "age": 2
-      },
-      {
        "name": "Implementation 33000214",
        "product": "CAREpoint",
-       "age": 2
-      },
-      {
-       "name": "Implementation 33000211",
-       "product": "CAREpoint",
-       "age": 1
+       "age": 12
       },
       {
        "name": "Implementation 33000213",
        "product": "e-Bridge",
-       "age": 1
+       "age": 11
+      },
+      {
+       "name": "Implementation 33000212",
+       "product": "CAREpoint",
+       "age": 10
+      },
+      {
+       "name": "Implementation 33000211",
+       "product": "CAREpoint",
+       "age": 9
+      },
+      {
+       "name": "Implementation 33000210",
+       "product": "CAREpoint",
+       "age": 8
+      },
+      {
+       "name": "Implementation 33000209",
+       "product": "e-Bridge",
+       "age": 7
       }
      ],
      "Software Installation Completed": [
       {
        "name": "Implementation 33000119",
        "product": "CAREpoint",
-       "age": 24
-      },
-      {
-       "name": "Implementation 33000124",
-       "product": "Both",
-       "age": 22
-      },
-      {
-       "name": "Implementation 33000118",
-       "product": "Both",
-       "age": 20
+       "age": 13
       },
       {
        "name": "Implementation 33000131",
        "product": "CAREpoint",
-       "age": 20
+       "age": 13
       },
       {
-       "name": "Implementation 33000135",
-       "product": "CAREpoint",
-       "age": 20
-      },
-      {
-       "name": "Implementation 33000123",
-       "product": "CAREpoint",
-       "age": 18
-      },
-      {
-       "name": "Implementation 33000121",
-       "product": "CAREpoint",
-       "age": 17
-      },
-      {
-       "name": "Implementation 33000132",
-       "product": "CAREpoint",
-       "age": 17
-      },
-      {
-       "name": "Implementation 33000112",
-       "product": "CAREpoint",
-       "age": 16
-      },
-      {
-       "name": "Implementation 33000114",
-       "product": "e-Bridge",
-       "age": 16
-      },
-      {
-       "name": "Implementation 33000122",
-       "product": "e-Bridge",
-       "age": 16
+       "name": "Implementation 33000118",
+       "product": "Both",
+       "age": 12
       },
       {
        "name": "Implementation 33000130",
        "product": "e-Bridge",
-       "age": 16
-      },
-      {
-       "name": "Implementation 33000120",
-       "product": "e-Bridge",
-       "age": 14
-      },
-      {
-       "name": "Implementation 33000113",
-       "product": "Both",
-       "age": 13
-      },
-      {
-       "name": "Implementation 33000125",
-       "product": "CAREpoint",
-       "age": 13
-      },
-      {
-       "name": "Implementation 33000129",
-       "product": "CAREpoint",
-       "age": 13
-      },
-      {
-       "name": "Implementation 33000115",
-       "product": "e-Bridge",
-       "age": 11
+       "age": 12
       },
       {
        "name": "Implementation 33000117",
        "product": "CAREpoint",
-       "age": 10
+       "age": 11
       },
       {
-       "name": "Implementation 33000126",
+       "name": "Implementation 33000129",
        "product": "CAREpoint",
-       "age": 10
+       "age": 11
       },
       {
-       "name": "Implementation 33000134",
+       "name": "Implementation 33000116",
        "product": "CAREpoint",
        "age": 10
       },
       {
        "name": "Implementation 33000128",
        "product": "CAREpoint",
-       "age": 8
+       "age": 10
+      },
+      {
+       "name": "Implementation 33000115",
+       "product": "e-Bridge",
+       "age": 9
       },
       {
        "name": "Implementation 33000127",
        "product": "Both",
+       "age": 9
+      },
+      {
+       "name": "Implementation 33000114",
+       "product": "e-Bridge",
+       "age": 8
+      },
+      {
+       "name": "Implementation 33000126",
+       "product": "CAREpoint",
+       "age": 8
+      },
+      {
+       "name": "Implementation 33000113",
+       "product": "Both",
        "age": 7
       },
       {
-       "name": "Implementation 33000133",
+       "name": "Implementation 33000125",
+       "product": "CAREpoint",
+       "age": 7
+      },
+      {
+       "name": "Implementation 33000112",
+       "product": "CAREpoint",
+       "age": 6
+      },
+      {
+       "name": "Implementation 33000124",
        "product": "Both",
-       "age": 5
+       "age": 6
       },
       {
-       "name": "Implementation 33000116",
-       "product": "CAREpoint",
-       "age": 3
-      }
-     ],
-     "Network Testing": [
-      {
-       "name": "Implementation 33000206",
-       "product": "Both",
-       "age": 54
-      },
-      {
-       "name": "Implementation 33000208",
-       "product": "CAREpoint",
-       "age": 42
-      },
-      {
-       "name": "Implementation 33000205",
-       "product": "e-Bridge",
-       "age": 25
-      },
-      {
-       "name": "Implementation 33000207",
-       "product": "Both",
-       "age": 22
-      },
-      {
-       "name": "Implementation 33000204",
-       "product": "CAREpoint",
-       "age": 14
-      },
-      {
-       "name": "Implementation 33000203",
-       "product": "e-Bridge",
-       "age": 10
-      }
-     ],
-     "Network Testing Completed": [
-      {
-       "name": "Implementation 33000177",
-       "product": "Both",
-       "age": 5
-      },
-      {
-       "name": "Implementation 33000179",
+       "name": "Implementation 33000123",
        "product": "CAREpoint",
        "age": 5
       },
       {
-       "name": "Implementation 33000180",
+       "name": "Implementation 33000135",
        "product": "CAREpoint",
        "age": 5
       },
       {
-       "name": "Implementation 33000183",
-       "product": "CAREpoint",
-       "age": 5
-      },
-      {
-       "name": "Implementation 33000184",
-       "product": "CAREpoint",
-       "age": 5
-      },
-      {
-       "name": "Implementation 33000185",
-       "product": "CAREpoint",
-       "age": 5
-      },
-      {
-       "name": "Implementation 33000178",
+       "name": "Implementation 33000122",
        "product": "e-Bridge",
        "age": 4
       },
       {
-       "name": "Implementation 33000176",
-       "product": "e-Bridge",
-       "age": 3
+       "name": "Implementation 33000134",
+       "product": "CAREpoint",
+       "age": 4
       },
       {
-       "name": "Implementation 33000182",
+       "name": "Implementation 33000121",
        "product": "CAREpoint",
        "age": 3
       },
       {
-       "name": "Implementation 33000173",
-       "product": "CAREpoint",
-       "age": 2
-      },
-      {
-       "name": "Implementation 33000174",
+       "name": "Implementation 33000133",
        "product": "Both",
+       "age": 3
+      },
+      {
+       "name": "Implementation 33000120",
+       "product": "e-Bridge",
        "age": 2
       },
       {
-       "name": "Implementation 33000175",
+       "name": "Implementation 33000132",
        "product": "CAREpoint",
        "age": 2
-      },
-      {
-       "name": "Implementation 33000181",
-       "product": "e-Bridge",
-       "age": 1
       }
      ],
-     "In Progress": [
+     "Network Testing": [
       {
-       "name": "Implementation 33000038",
-       "product": "CAREpoint",
-       "age": 43
-      },
-      {
-       "name": "Implementation 33000040",
-       "product": "Both",
-       "age": 43
-      },
-      {
-       "name": "Implementation 33000056",
-       "product": "Both",
-       "age": 35
-      },
-      {
-       "name": "Implementation 33000037",
-       "product": "CAREpoint",
-       "age": 34
-      },
-      {
-       "name": "Implementation 33000043",
-       "product": "CAREpoint",
-       "age": 33
-      },
-      {
-       "name": "Implementation 33000032",
-       "product": "CAREpoint",
-       "age": 32
-      },
-      {
-       "name": "Implementation 33000036",
-       "product": "CAREpoint",
-       "age": 32
-      },
-      {
-       "name": "Implementation 33000030",
-       "product": "Both",
-       "age": 31
-      },
-      {
-       "name": "Implementation 33000050",
-       "product": "CAREpoint",
-       "age": 31
-      },
-      {
-       "name": "Implementation 33000053",
-       "product": "CAREpoint",
-       "age": 31
-      },
-      {
-       "name": "Implementation 33000048",
-       "product": "CAREpoint",
-       "age": 30
-      },
-      {
-       "name": "Implementation 33000052",
-       "product": "CAREpoint",
-       "age": 29
-      },
-      {
-       "name": "Implementation 33000046",
-       "product": "CAREpoint",
-       "age": 28
-      },
-      {
-       "name": "Implementation 33000055",
-       "product": "e-Bridge",
-       "age": 28
-      },
-      {
-       "name": "Implementation 33000034",
-       "product": "CAREpoint",
-       "age": 26
-      },
-      {
-       "name": "Implementation 33000031",
-       "product": "CAREpoint",
-       "age": 25
-      },
-      {
-       "name": "Implementation 33000049",
-       "product": "Both",
-       "age": 24
-      },
-      {
-       "name": "Implementation 33000044",
-       "product": "CAREpoint",
-       "age": 23
-      },
-      {
-       "name": "Implementation 33000054",
-       "product": "Both",
-       "age": 22
-      },
-      {
-       "name": "Implementation 33000041",
-       "product": "CAREpoint",
-       "age": 21
-      },
-      {
-       "name": "Implementation 33000033",
-       "product": "Both",
-       "age": 20
-      },
-      {
-       "name": "Implementation 33000042",
-       "product": "e-Bridge",
-       "age": 20
-      },
-      {
-       "name": "Implementation 33000047",
-       "product": "Both",
-       "age": 20
-      },
-      {
-       "name": "Implementation 33000039",
-       "product": "CAREpoint",
-       "age": 17
-      },
-      {
-       "name": "Implementation 33000057",
+       "name": "Implementation 33000203",
        "product": "e-Bridge",
        "age": 13
       },
       {
+       "name": "Implementation 33000208",
+       "product": "CAREpoint",
+       "age": 6
+      },
+      {
+       "name": "Implementation 33000207",
+       "product": "Both",
+       "age": 5
+      },
+      {
+       "name": "Implementation 33000206",
+       "product": "Both",
+       "age": 4
+      },
+      {
+       "name": "Implementation 33000205",
+       "product": "e-Bridge",
+       "age": 3
+      },
+      {
+       "name": "Implementation 33000204",
+       "product": "CAREpoint",
+       "age": 2
+      }
+     ],
+     "Network Testing Completed": [
+      {
+       "name": "Implementation 33000179",
+       "product": "CAREpoint",
+       "age": 23
+      },
+      {
+       "name": "Implementation 33000178",
+       "product": "e-Bridge",
+       "age": 22
+      },
+      {
+       "name": "Implementation 33000177",
+       "product": "Both",
+       "age": 21
+      },
+      {
+       "name": "Implementation 33000176",
+       "product": "e-Bridge",
+       "age": 20
+      },
+      {
+       "name": "Implementation 33000175",
+       "product": "CAREpoint",
+       "age": 19
+      },
+      {
+       "name": "Implementation 33000185",
+       "product": "CAREpoint",
+       "age": 19
+      },
+      {
+       "name": "Implementation 33000174",
+       "product": "Both",
+       "age": 18
+      },
+      {
+       "name": "Implementation 33000184",
+       "product": "CAREpoint",
+       "age": 18
+      },
+      {
+       "name": "Implementation 33000173",
+       "product": "CAREpoint",
+       "age": 17
+      },
+      {
+       "name": "Implementation 33000183",
+       "product": "CAREpoint",
+       "age": 17
+      },
+      {
+       "name": "Implementation 33000182",
+       "product": "CAREpoint",
+       "age": 16
+      },
+      {
+       "name": "Implementation 33000181",
+       "product": "e-Bridge",
+       "age": 15
+      },
+      {
+       "name": "Implementation 33000180",
+       "product": "CAREpoint",
+       "age": 14
+      }
+     ],
+     "In Progress": [
+      {
+       "name": "Implementation 33000035",
+       "product": "CAREpoint",
+       "age": 13
+      },
+      {
+       "name": "Implementation 33000047",
+       "product": "Both",
+       "age": 13
+      },
+      {
+       "name": "Implementation 33000034",
+       "product": "CAREpoint",
+       "age": 12
+      },
+      {
+       "name": "Implementation 33000046",
+       "product": "CAREpoint",
+       "age": 12
+      },
+      {
+       "name": "Implementation 33000033",
+       "product": "Both",
+       "age": 11
+      },
+      {
        "name": "Implementation 33000045",
+       "product": "Both",
+       "age": 11
+      },
+      {
+       "name": "Implementation 33000057",
+       "product": "e-Bridge",
+       "age": 11
+      },
+      {
+       "name": "Implementation 33000032",
+       "product": "CAREpoint",
+       "age": 10
+      },
+      {
+       "name": "Implementation 33000044",
+       "product": "CAREpoint",
+       "age": 10
+      },
+      {
+       "name": "Implementation 33000056",
+       "product": "Both",
+       "age": 10
+      },
+      {
+       "name": "Implementation 33000031",
+       "product": "CAREpoint",
+       "age": 9
+      },
+      {
+       "name": "Implementation 33000043",
+       "product": "CAREpoint",
+       "age": 9
+      },
+      {
+       "name": "Implementation 33000055",
+       "product": "e-Bridge",
+       "age": 9
+      },
+      {
+       "name": "Implementation 33000030",
        "product": "Both",
        "age": 8
       },
       {
-       "name": "Implementation 33000035",
+       "name": "Implementation 33000042",
+       "product": "e-Bridge",
+       "age": 8
+      },
+      {
+       "name": "Implementation 33000054",
+       "product": "Both",
+       "age": 8
+      },
+      {
+       "name": "Implementation 33000041",
+       "product": "CAREpoint",
+       "age": 7
+      },
+      {
+       "name": "Implementation 33000053",
+       "product": "CAREpoint",
+       "age": 7
+      },
+      {
+       "name": "Implementation 33000040",
+       "product": "Both",
+       "age": 6
+      },
+      {
+       "name": "Implementation 33000052",
+       "product": "CAREpoint",
+       "age": 6
+      },
+      {
+       "name": "Implementation 33000039",
        "product": "CAREpoint",
        "age": 5
       },
       {
        "name": "Implementation 33000051",
        "product": "CAREpoint",
+       "age": 5
+      },
+      {
+       "name": "Implementation 33000038",
+       "product": "CAREpoint",
        "age": 4
+      },
+      {
+       "name": "Implementation 33000050",
+       "product": "CAREpoint",
+       "age": 4
+      },
+      {
+       "name": "Implementation 33000037",
+       "product": "CAREpoint",
+       "age": 3
+      },
+      {
+       "name": "Implementation 33000049",
+       "product": "Both",
+       "age": 3
+      },
+      {
+       "name": "Implementation 33000036",
+       "product": "CAREpoint",
+       "age": 2
+      },
+      {
+       "name": "Implementation 33000048",
+       "product": "CAREpoint",
+       "age": 2
       }
      ],
      "In Training": [
       {
        "name": "Implementation 33000199",
        "product": "CAREpoint",
-       "age": 34
+       "age": 33
       },
       {
        "name": "Implementation 33000198",
        "product": "CAREpoint",
-       "age": 31
-      },
-      {
-       "name": "Implementation 33000200",
-       "product": "CAREpoint",
-       "age": 23
-      },
-      {
-       "name": "Implementation 33000202",
-       "product": "CAREpoint",
-       "age": 19
-      },
-      {
-       "name": "Implementation 33000196",
-       "product": "CAREpoint",
-       "age": 18
-      },
-      {
-       "name": "Implementation 33000195",
-       "product": "CAREpoint",
-       "age": 16
+       "age": 32
       },
       {
        "name": "Implementation 33000197",
        "product": "CAREpoint",
-       "age": 11
+       "age": 31
+      },
+      {
+       "name": "Implementation 33000196",
+       "product": "CAREpoint",
+       "age": 30
+      },
+      {
+       "name": "Implementation 33000195",
+       "product": "CAREpoint",
+       "age": 29
+      },
+      {
+       "name": "Implementation 33000202",
+       "product": "CAREpoint",
+       "age": 12
       },
       {
        "name": "Implementation 33000201",
+       "product": "CAREpoint",
+       "age": 11
+      },
+      {
+       "name": "Implementation 33000200",
        "product": "CAREpoint",
        "age": 10
       }
@@ -1388,73 +1377,73 @@
       {
        "name": "Implementation 33000217",
        "product": "CAREpoint",
-       "age": 4
+       "age": 14
       }
      ],
      "On-hold": [
       {
        "name": "Implementation 33000216",
        "product": "e-Bridge",
-       "age": 18
+       "age": 13
       },
       {
        "name": "Implementation 33000215",
        "product": "CAREpoint",
-       "age": 14
+       "age": 12
       }
      ],
      "Go-Live Scheduled": [
       {
-       "name": "Implementation 33000191",
-       "product": "e-Bridge",
-       "age": 13
-      },
-      {
-       "name": "Implementation 33000190",
-       "product": "CAREpoint",
-       "age": 10
-      },
-      {
-       "name": "Implementation 33000187",
-       "product": "CAREpoint",
-       "age": 8
+       "name": "Implementation 33000194",
+       "product": "Both",
+       "age": 28
       },
       {
        "name": "Implementation 33000193",
        "product": "CAREpoint",
-       "age": 7
-      },
-      {
-       "name": "Implementation 33000186",
-       "product": "CAREpoint",
-       "age": 5
-      },
-      {
-       "name": "Implementation 33000189",
-       "product": "Both",
-       "age": 5
-      },
-      {
-       "name": "Implementation 33000188",
-       "product": "CAREpoint",
-       "age": 4
+       "age": 27
       },
       {
        "name": "Implementation 33000192",
        "product": "e-Bridge",
-       "age": 4
+       "age": 26
       },
       {
-       "name": "Implementation 33000194",
+       "name": "Implementation 33000189",
        "product": "Both",
-       "age": 3
+       "age": 23
+      },
+      {
+       "name": "Implementation 33000188",
+       "product": "CAREpoint",
+       "age": 22
+      },
+      {
+       "name": "Implementation 33000187",
+       "product": "CAREpoint",
+       "age": 21
+      },
+      {
+       "name": "Implementation 33000186",
+       "product": "CAREpoint",
+       "age": 20
+      },
+      {
+       "name": "Implementation 33000191",
+       "product": "e-Bridge",
+       "age": 15
+      },
+      {
+       "name": "Implementation 33000190",
+       "product": "CAREpoint",
+       "age": 14
       }
      ]
     },
     "snapshot": {
      "recordCount": 333,
      "openTotal": 217,
-     "totalExcess": 412,
+     "totalExcess": 254,
      "medLead": 128,
      "byStage": {
       "Not Started": {
@@ -1513,21 +1502,21 @@
       "snapshotDate": null,
       "open": 87,
       "openDelta": null,
-      "concentrationPct": 95,
-      "totalExcess": 285,
+      "concentrationPct": 100,
+      "totalExcess": 123,
       "prevExcess": null,
       "topDrags": [
        {
         "stage": "Pending Server/Remote Access",
-        "excess": 216
+        "excess": 88
        },
        {
-        "stage": "Pending Server Tour",
-        "excess": 36
+        "stage": "Pending Technical Readiness",
+        "excess": 32
        },
        {
-        "stage": "In Progress",
-        "excess": 19
+        "stage": "Pending Kickoff Call",
+        "excess": 3
        }
       ],
       "intakeState": "behind",
@@ -1541,38 +1530,29 @@
      "focusRows": [
       {
        "stage": "Pending Server/Remote Access",
-       "excess": 216,
-       "countPastNormal": 9,
+       "excess": 88,
+       "countPastNormal": 10,
        "normal": 22,
-       "oldest": 67,
-       "owner": "customer",
-       "key": "aging"
-      },
-      {
-       "stage": "Pending Server Tour",
-       "excess": 36,
-       "countPastNormal": 5,
-       "normal": 22,
-       "oldest": 33,
-       "owner": "customer",
-       "key": "aging"
-      },
-      {
-       "stage": "In Progress",
-       "excess": 19,
-       "countPastNormal": 3,
-       "normal": 30,
        "oldest": 43,
-       "owner": "team",
-       "key": "building"
+       "owner": "customer",
+       "key": "aging"
       },
       {
-       "stage": "Network Testing",
-       "excess": 14,
-       "countPastNormal": 1,
-       "normal": 40,
-       "oldest": 54,
-       "owner": "team",
+       "stage": "Pending Technical Readiness",
+       "excess": 32,
+       "countPastNormal": 4,
+       "normal": 32,
+       "oldest": 43,
+       "owner": "customer",
+       "key": "aging"
+      },
+      {
+       "stage": "Pending Kickoff Call",
+       "excess": 3,
+       "countPastNormal": 2,
+       "normal": 30,
+       "oldest": 32,
+       "owner": "customer",
        "key": "building"
       }
      ],
@@ -1603,10 +1583,10 @@
        "departs": 19
       },
       {
-       "stage": "Pending Technical Readiness",
+       "stage": "Pending Server Tour",
        "net": 6,
-       "arrivals": 26,
-       "departs": 20
+       "arrivals": 29,
+       "departs": 23
       },
       {
        "stage": "Network Testing",
@@ -1631,7 +1611,7 @@
        "n": 49,
        "normal": 26,
        "p95": 39,
-       "oldest": 16,
+       "oldest": 10,
        "excess": 0,
        "net": 9,
        "owner": "team"
@@ -1645,36 +1625,36 @@
        "n": 43,
        "normal": 30,
        "p95": 40,
-       "oldest": 25,
-       "excess": 0,
+       "oldest": 32,
+       "excess": 3,
        "net": 7,
        "owner": "customer"
       },
       {
        "order": 3,
        "stage": "Pending Technical Readiness",
-       "key": "building",
-       "verdict": "Backlog building",
+       "key": "aging",
+       "verdict": "Aging",
        "wip": 11,
        "n": 34,
        "normal": 32,
        "p95": 47,
-       "oldest": 26,
-       "excess": 0,
+       "oldest": 43,
+       "excess": 32,
        "net": 6,
        "owner": "customer"
       },
       {
        "order": 4,
        "stage": "Pending Server Tour",
-       "key": "aging",
-       "verdict": "Aging",
+       "key": "building",
+       "verdict": "Backlog building",
        "wip": 9,
        "n": 36,
        "normal": 22,
        "p95": 26,
-       "oldest": 33,
-       "excess": 36,
+       "oldest": 20,
+       "excess": 0,
        "net": 6,
        "owner": "customer"
       },
@@ -1687,8 +1667,8 @@
        "n": 22,
        "normal": 22,
        "p95": 34,
-       "oldest": 67,
-       "excess": 216,
+       "oldest": 43,
+       "excess": 88,
        "net": 9,
        "owner": "customer"
       },
@@ -1701,7 +1681,7 @@
        "n": 23,
        "normal": 36,
        "p95": 64,
-       "oldest": 2,
+       "oldest": 11,
        "excess": 0,
        "net": 0,
        "owner": "team"
@@ -1715,7 +1695,7 @@
        "n": 22,
        "normal": 36,
        "p95": 38,
-       "oldest": 22,
+       "oldest": 12,
        "excess": 0,
        "net": 9,
        "owner": "team"
@@ -1729,8 +1709,8 @@
        "n": 19,
        "normal": 40,
        "p95": 46,
-       "oldest": 54,
-       "excess": 14,
+       "oldest": 13,
+       "excess": 0,
        "net": 4,
        "owner": "team"
       },
@@ -1743,7 +1723,7 @@
        "n": 30,
        "normal": 35,
        "p95": 39,
-       "oldest": 5,
+       "oldest": 22,
        "excess": 0,
        "net": 3,
        "owner": "team"
@@ -1757,8 +1737,8 @@
        "n": 10,
        "normal": 30,
        "p95": 44,
-       "oldest": 43,
-       "excess": 19,
+       "oldest": 13,
+       "excess": 0,
        "net": 11,
        "owner": "team"
       },
@@ -1799,7 +1779,7 @@
        "n": 14,
        "normal": 33,
        "p95": 66,
-       "oldest": 18,
+       "oldest": 13,
        "excess": 0,
        "net": -1,
        "owner": "customer"
@@ -1813,7 +1793,7 @@
        "n": 13,
        "normal": 37,
        "p95": 41,
-       "oldest": 13,
+       "oldest": 28,
        "excess": 0,
        "net": 2,
        "owner": "team"
@@ -1824,123 +1804,138 @@
     "items": {
      "Not Started": [
       {
-       "name": "Implementation 33000026",
-       "product": "e-Bridge",
-       "age": 16
-      },
-      {
-       "name": "Implementation 33000029",
-       "product": "e-Bridge",
-       "age": 14
-      },
-      {
-       "name": "Implementation 33000004",
-       "product": "e-Bridge",
-       "age": 13
-      },
-      {
        "name": "Implementation 33000020",
        "product": "e-Bridge",
-       "age": 13
-      },
-      {
-       "name": "Implementation 33000005",
-       "product": "e-Bridge",
-       "age": 12
-      },
-      {
-       "name": "Implementation 33000024",
-       "product": "Both",
-       "age": 12
-      },
-      {
-       "name": "Implementation 33000027",
-       "product": "Both",
-       "age": 11
+       "age": 10
       },
       {
        "name": "Implementation 33000006",
        "product": "e-Bridge",
-       "age": 10
+       "age": 8
+      },
+      {
+       "name": "Implementation 33000005",
+       "product": "e-Bridge",
+       "age": 7
+      },
+      {
+       "name": "Implementation 33000029",
+       "product": "e-Bridge",
+       "age": 7
+      },
+      {
+       "name": "Implementation 33000004",
+       "product": "e-Bridge",
+       "age": 6
+      },
+      {
+       "name": "Implementation 33000027",
+       "product": "Both",
+       "age": 5
+      },
+      {
+       "name": "Implementation 33000026",
+       "product": "e-Bridge",
+       "age": 4
       },
       {
        "name": "Implementation 33000001",
        "product": "e-Bridge",
        "age": 3
+      },
+      {
+       "name": "Implementation 33000024",
+       "product": "Both",
+       "age": 2
       }
      ],
      "Pending Kickoff Call": [
+      {
+       "name": "Implementation 33000160",
+       "product": "e-Bridge",
+       "age": 32
+      },
+      {
+       "name": "Implementation 33000172",
+       "product": "e-Bridge",
+       "age": 31
+      },
+      {
+       "name": "Implementation 33000171",
+       "product": "e-Bridge",
+       "age": 30
+      },
+      {
+       "name": "Implementation 33000170",
+       "product": "Both",
+       "age": 29
+      },
+      {
+       "name": "Implementation 33000169",
+       "product": "e-Bridge",
+       "age": 28
+      },
+      {
+       "name": "Implementation 33000168",
+       "product": "Both",
+       "age": 27
+      },
       {
        "name": "Implementation 33000166",
        "product": "e-Bridge",
        "age": 25
       },
       {
-       "name": "Implementation 33000169",
-       "product": "e-Bridge",
-       "age": 25
-      },
-      {
-       "name": "Implementation 33000168",
-       "product": "Both",
-       "age": 23
-      },
-      {
-       "name": "Implementation 33000160",
-       "product": "e-Bridge",
-       "age": 19
-      },
-      {
        "name": "Implementation 33000165",
        "product": "e-Bridge",
-       "age": 19
-      },
-      {
-       "name": "Implementation 33000172",
-       "product": "e-Bridge",
-       "age": 13
+       "age": 24
       },
       {
        "name": "Implementation 33000163",
        "product": "e-Bridge",
-       "age": 10
-      },
-      {
-       "name": "Implementation 33000171",
-       "product": "e-Bridge",
-       "age": 8
-      },
-      {
-       "name": "Implementation 33000170",
-       "product": "Both",
-       "age": 7
+       "age": 22
       }
      ],
      "Pending Technical Readiness": [
       {
-       "name": "Implementation 33000092",
-       "product": "e-Bridge",
-       "age": 26
+       "name": "Implementation 33000093",
+       "product": "Both",
+       "age": 43
       },
       {
-       "name": "Implementation 33000102",
+       "name": "Implementation 33000092",
        "product": "e-Bridge",
-       "age": 21
+       "age": 42
       },
       {
        "name": "Implementation 33000088",
        "product": "e-Bridge",
-       "age": 20
+       "age": 38
       },
       {
        "name": "Implementation 33000087",
        "product": "Both",
-       "age": 16
+       "age": 37
       },
       {
-       "name": "Implementation 33000093",
+       "name": "Implementation 33000111",
+       "product": "e-Bridge",
+       "age": 20
+      },
+      {
+       "name": "Implementation 33000110",
        "product": "Both",
-       "age": 14
+       "age": 19
+      },
+      {
+       "name": "Implementation 33000109",
+       "product": "e-Bridge",
+       "age": 18
+      },
+      {
+       "name": "Implementation 33000106",
+       "product": "e-Bridge",
+       "age": 15
       },
       {
        "name": "Implementation 33000104",
@@ -1948,28 +1943,13 @@
        "age": 13
       },
       {
-       "name": "Implementation 33000110",
-       "product": "Both",
-       "age": 13
-      },
-      {
-       "name": "Implementation 33000111",
+       "name": "Implementation 33000102",
        "product": "e-Bridge",
-       "age": 12
+       "age": 11
       },
       {
        "name": "Implementation 33000100",
        "product": "Both",
-       "age": 10
-      },
-      {
-       "name": "Implementation 33000106",
-       "product": "e-Bridge",
-       "age": 10
-      },
-      {
-       "name": "Implementation 33000109",
-       "product": "e-Bridge",
        "age": 9
       }
      ],
@@ -1977,279 +1957,279 @@
       {
        "name": "Implementation 33000143",
        "product": "e-Bridge",
-       "age": 33
-      },
-      {
-       "name": "Implementation 33000144",
-       "product": "e-Bridge",
-       "age": 31
-      },
-      {
-       "name": "Implementation 33000147",
-       "product": "e-Bridge",
-       "age": 31
+       "age": 20
       },
       {
        "name": "Implementation 33000142",
        "product": "e-Bridge",
-       "age": 28
+       "age": 19
       },
       {
        "name": "Implementation 33000140",
        "product": "e-Bridge",
-       "age": 23
+       "age": 17
       },
       {
        "name": "Implementation 33000138",
        "product": "e-Bridge",
-       "age": 22
-      },
-      {
-       "name": "Implementation 33000148",
-       "product": "e-Bridge",
-       "age": 22
-      },
-      {
-       "name": "Implementation 33000146",
-       "product": "Both",
-       "age": 20
+       "age": 15
       },
       {
        "name": "Implementation 33000136",
        "product": "e-Bridge",
-       "age": 10
+       "age": 13
+      },
+      {
+       "name": "Implementation 33000148",
+       "product": "e-Bridge",
+       "age": 9
+      },
+      {
+       "name": "Implementation 33000147",
+       "product": "e-Bridge",
+       "age": 8
+      },
+      {
+       "name": "Implementation 33000146",
+       "product": "Both",
+       "age": 7
+      },
+      {
+       "name": "Implementation 33000144",
+       "product": "e-Bridge",
+       "age": 5
       }
      ],
      "Pending Server/Remote Access": [
       {
        "name": "Implementation 33000081",
        "product": "Both",
-       "age": 67
-      },
-      {
-       "name": "Implementation 33000058",
-       "product": "e-Bridge",
-       "age": 60
-      },
-      {
-       "name": "Implementation 33000085",
-       "product": "e-Bridge",
-       "age": 56
-      },
-      {
-       "name": "Implementation 33000061",
-       "product": "e-Bridge",
-       "age": 46
-      },
-      {
-       "name": "Implementation 33000066",
-       "product": "e-Bridge",
-       "age": 46
-      },
-      {
-       "name": "Implementation 33000071",
-       "product": "Both",
-       "age": 46
+       "age": 43
       },
       {
        "name": "Implementation 33000080",
        "product": "e-Bridge",
-       "age": 43
+       "age": 42
       },
       {
-       "name": "Implementation 33000078",
+       "name": "Implementation 33000085",
        "product": "e-Bridge",
-       "age": 26
+       "age": 35
+      },
+      {
+       "name": "Implementation 33000066",
+       "product": "e-Bridge",
+       "age": 29
       },
       {
        "name": "Implementation 33000065",
        "product": "Both",
-       "age": 24
+       "age": 28
       },
       {
-       "name": "Implementation 33000064",
-       "product": "e-Bridge",
-       "age": 20
-      },
-      {
-       "name": "Implementation 33000063",
-       "product": "Both",
-       "age": 17
-      },
-      {
-       "name": "Implementation 33000076",
-       "product": "e-Bridge",
-       "age": 12
-      }
-     ],
-     "Pending Software Installation": [
-      {
-       "name": "Implementation 33000209",
-       "product": "e-Bridge",
-       "age": 2
-      },
-      {
-       "name": "Implementation 33000213",
-       "product": "e-Bridge",
-       "age": 1
-      }
-     ],
-     "Software Installation Completed": [
-      {
-       "name": "Implementation 33000124",
-       "product": "Both",
-       "age": 22
-      },
-      {
-       "name": "Implementation 33000118",
-       "product": "Both",
-       "age": 20
-      },
-      {
-       "name": "Implementation 33000114",
-       "product": "e-Bridge",
-       "age": 16
-      },
-      {
-       "name": "Implementation 33000122",
-       "product": "e-Bridge",
-       "age": 16
-      },
-      {
-       "name": "Implementation 33000130",
-       "product": "e-Bridge",
-       "age": 16
-      },
-      {
-       "name": "Implementation 33000120",
-       "product": "e-Bridge",
-       "age": 14
-      },
-      {
-       "name": "Implementation 33000113",
-       "product": "Both",
-       "age": 13
-      },
-      {
-       "name": "Implementation 33000115",
-       "product": "e-Bridge",
-       "age": 11
-      },
-      {
-       "name": "Implementation 33000127",
-       "product": "Both",
-       "age": 7
-      },
-      {
-       "name": "Implementation 33000133",
-       "product": "Both",
-       "age": 5
-      }
-     ],
-     "Network Testing": [
-      {
-       "name": "Implementation 33000206",
-       "product": "Both",
-       "age": 54
-      },
-      {
-       "name": "Implementation 33000205",
-       "product": "e-Bridge",
-       "age": 25
-      },
-      {
-       "name": "Implementation 33000207",
-       "product": "Both",
-       "age": 22
-      },
-      {
-       "name": "Implementation 33000203",
-       "product": "e-Bridge",
-       "age": 10
-      }
-     ],
-     "Network Testing Completed": [
-      {
-       "name": "Implementation 33000177",
-       "product": "Both",
-       "age": 5
-      },
-      {
-       "name": "Implementation 33000178",
-       "product": "e-Bridge",
-       "age": 4
-      },
-      {
-       "name": "Implementation 33000176",
-       "product": "e-Bridge",
-       "age": 3
-      },
-      {
-       "name": "Implementation 33000174",
-       "product": "Both",
-       "age": 2
-      },
-      {
-       "name": "Implementation 33000181",
-       "product": "e-Bridge",
-       "age": 1
-      }
-     ],
-     "In Progress": [
-      {
-       "name": "Implementation 33000040",
-       "product": "Both",
-       "age": 43
-      },
-      {
-       "name": "Implementation 33000056",
-       "product": "Both",
-       "age": 35
-      },
-      {
-       "name": "Implementation 33000030",
-       "product": "Both",
-       "age": 31
-      },
-      {
-       "name": "Implementation 33000055",
+       "name": "Implementation 33000078",
        "product": "e-Bridge",
        "age": 28
       },
       {
-       "name": "Implementation 33000049",
+       "name": "Implementation 33000064",
+       "product": "e-Bridge",
+       "age": 27
+      },
+      {
+       "name": "Implementation 33000063",
        "product": "Both",
+       "age": 26
+      },
+      {
+       "name": "Implementation 33000076",
+       "product": "e-Bridge",
+       "age": 26
+      },
+      {
+       "name": "Implementation 33000061",
+       "product": "e-Bridge",
        "age": 24
       },
       {
-       "name": "Implementation 33000054",
-       "product": "Both",
-       "age": 22
-      },
-      {
-       "name": "Implementation 33000033",
-       "product": "Both",
-       "age": 20
-      },
-      {
-       "name": "Implementation 33000042",
+       "name": "Implementation 33000058",
        "product": "e-Bridge",
-       "age": 20
+       "age": 21
       },
       {
-       "name": "Implementation 33000047",
+       "name": "Implementation 33000071",
        "product": "Both",
-       "age": 20
+       "age": 21
+      }
+     ],
+     "Pending Software Installation": [
+      {
+       "name": "Implementation 33000213",
+       "product": "e-Bridge",
+       "age": 11
       },
       {
-       "name": "Implementation 33000057",
+       "name": "Implementation 33000209",
+       "product": "e-Bridge",
+       "age": 7
+      }
+     ],
+     "Software Installation Completed": [
+      {
+       "name": "Implementation 33000118",
+       "product": "Both",
+       "age": 12
+      },
+      {
+       "name": "Implementation 33000130",
+       "product": "e-Bridge",
+       "age": 12
+      },
+      {
+       "name": "Implementation 33000115",
+       "product": "e-Bridge",
+       "age": 9
+      },
+      {
+       "name": "Implementation 33000127",
+       "product": "Both",
+       "age": 9
+      },
+      {
+       "name": "Implementation 33000114",
+       "product": "e-Bridge",
+       "age": 8
+      },
+      {
+       "name": "Implementation 33000113",
+       "product": "Both",
+       "age": 7
+      },
+      {
+       "name": "Implementation 33000124",
+       "product": "Both",
+       "age": 6
+      },
+      {
+       "name": "Implementation 33000122",
+       "product": "e-Bridge",
+       "age": 4
+      },
+      {
+       "name": "Implementation 33000133",
+       "product": "Both",
+       "age": 3
+      },
+      {
+       "name": "Implementation 33000120",
+       "product": "e-Bridge",
+       "age": 2
+      }
+     ],
+     "Network Testing": [
+      {
+       "name": "Implementation 33000203",
        "product": "e-Bridge",
        "age": 13
       },
       {
+       "name": "Implementation 33000207",
+       "product": "Both",
+       "age": 5
+      },
+      {
+       "name": "Implementation 33000206",
+       "product": "Both",
+       "age": 4
+      },
+      {
+       "name": "Implementation 33000205",
+       "product": "e-Bridge",
+       "age": 3
+      }
+     ],
+     "Network Testing Completed": [
+      {
+       "name": "Implementation 33000178",
+       "product": "e-Bridge",
+       "age": 22
+      },
+      {
+       "name": "Implementation 33000177",
+       "product": "Both",
+       "age": 21
+      },
+      {
+       "name": "Implementation 33000176",
+       "product": "e-Bridge",
+       "age": 20
+      },
+      {
+       "name": "Implementation 33000174",
+       "product": "Both",
+       "age": 18
+      },
+      {
+       "name": "Implementation 33000181",
+       "product": "e-Bridge",
+       "age": 15
+      }
+     ],
+     "In Progress": [
+      {
+       "name": "Implementation 33000047",
+       "product": "Both",
+       "age": 13
+      },
+      {
+       "name": "Implementation 33000033",
+       "product": "Both",
+       "age": 11
+      },
+      {
        "name": "Implementation 33000045",
        "product": "Both",
+       "age": 11
+      },
+      {
+       "name": "Implementation 33000057",
+       "product": "e-Bridge",
+       "age": 11
+      },
+      {
+       "name": "Implementation 33000056",
+       "product": "Both",
+       "age": 10
+      },
+      {
+       "name": "Implementation 33000055",
+       "product": "e-Bridge",
+       "age": 9
+      },
+      {
+       "name": "Implementation 33000030",
+       "product": "Both",
        "age": 8
+      },
+      {
+       "name": "Implementation 33000042",
+       "product": "e-Bridge",
+       "age": 8
+      },
+      {
+       "name": "Implementation 33000054",
+       "product": "Both",
+       "age": 8
+      },
+      {
+       "name": "Implementation 33000040",
+       "product": "Both",
+       "age": 6
+      },
+      {
+       "name": "Implementation 33000049",
+       "product": "Both",
+       "age": 3
       }
      ],
      "In Training": [],
@@ -2258,36 +2238,36 @@
       {
        "name": "Implementation 33000216",
        "product": "e-Bridge",
-       "age": 18
+       "age": 13
       }
      ],
      "Go-Live Scheduled": [
       {
-       "name": "Implementation 33000191",
-       "product": "e-Bridge",
-       "age": 13
-      },
-      {
-       "name": "Implementation 33000189",
+       "name": "Implementation 33000194",
        "product": "Both",
-       "age": 5
+       "age": 28
       },
       {
        "name": "Implementation 33000192",
        "product": "e-Bridge",
-       "age": 4
+       "age": 26
       },
       {
-       "name": "Implementation 33000194",
+       "name": "Implementation 33000189",
        "product": "Both",
-       "age": 3
+       "age": 23
+      },
+      {
+       "name": "Implementation 33000191",
+       "product": "e-Bridge",
+       "age": 15
       }
      ]
     },
     "snapshot": {
      "recordCount": 133,
      "openTotal": 87,
-     "totalExcess": 285,
+     "totalExcess": 123,
      "medLead": 137,
      "byStage": {
       "Not Started": {
