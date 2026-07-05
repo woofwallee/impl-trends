@@ -392,25 +392,37 @@
         <div class="row-h"><div><h3>How to use</h3></div>
         <button class="btn" id="howtoBack">← Back to dashboard</button></div>
         <div class="htbody" style="font-size:13.5px;line-height:1.6;margin-top:6px;max-width:720px">
-          <div style="font-size:12px;line-height:2;margin-bottom:4px;color:var(--hint)">Jump to: <a href="#ht-0" style="color:var(--blue);text-decoration:none">What this is</a> · <a href="#ht-1" style="color:var(--blue);text-decoration:none">Monthly routine</a> · <a href="#ht-2" style="color:var(--blue);text-decoration:none">The export</a> · <a href="#ht-3" style="color:var(--blue);text-decoration:none">Reading it</a> · <a href="#ht-4" style="color:var(--blue);text-decoration:none">Colors</a> · <a href="#ht-5" style="color:var(--blue);text-decoration:none">Timeframes</a> · <a href="#ht-6" style="color:var(--blue);text-decoration:none">Charts</a> · <a href="#ht-8" style="color:var(--blue);text-decoration:none">Counting quirks</a> · <a href="#ht-11" style="color:var(--blue);text-decoration:none">Your data</a></div>
-          <b id="ht-0">What this is</b>
-          <ul><li>HubSpot shows today; this shows the trend over time.</li><li>Import your monthly export to track open implementations, stage times, and delivery speed.</li><li>Opens with sample data — your first real import replaces it.</li></ul>
-          <b id="ht-1">Monthly routine</b>
-          <ul><li>Export all Implementation records from HubSpot.</li><li>Import the CSV here.</li><li>The dashboard remembers each month, so the picture builds over time.</li></ul>
-          <b id="ht-2">Getting the export right</b>
-          <ul><li>CRM &rarr; Implementations &rarr; <b>All Implementations</b> view, <b>every filter cleared</b> (open and completed both matter).</li><li>Export &rarr; <b>CSV</b>, properties in your view's columns (the standard 45-column view has everything).</li><li>Name it <b>implementations_YYYY-MM-DD.csv</b>.</li><li>Must include (exact HubSpot names): Record ID · Implementation Name · Implementation Type · Implementation pipeline stage · Time in current stage · Date entered current stage · PO Date · Implementation Live/Complete · Duration between PO date and Live/Complete Date · Object create date/time. Also used when present: Estimated Go-Live Date and the per-stage "Date entered/exited … (Implementation Pipeline)" columns.</li></ul>
-          <b id="ht-3">Reading the dashboard</b>
-          <ul><li><b>Top cards</b> — trend (Rising / Steady / Falling) vs the period before, for open work, each product, and Go-Lives.</li><li><b>Open Pipeline Trend</b> — whether open work is piling up or clearing.</li><li><b>Time in Stage</b> — where work is stuck. Overdue = days open work sits past a stage's benchmark; ranked biggest bottleneck first. Click a stage to chart it and see who's waiting.</li><li><b>Stage Breakdown</b> — every stage graded at once, with sortable columns.</li><li><b>PO to Go-Live / Go-Lives</b> — median wait to go live, and what shipped (plus a "went live but not closed out" link).</li></ul>
-          <b id="ht-4">What the colors mean</b>
-          <ul><li>Green = improving, red = worsening, amber = watch.</li><li>The dotted line marks where the visible period started: below it is better than the start, above is worse.</li><li>Go-Lives bars are neutral (a count); the change pill greens when more shipped than the period before.</li></ul>
-          <b id="ht-5">Timeframes and comparisons</b>
-          <ul><li>Pick a preset or set exact dates; opens on the last full month. Product buttons filter the whole dashboard.</li><li>Charts and trend pills recalc for your range vs the equal-length period right before it.</li><li>Stage verdicts and Overdue describe the latest import (30-day flow window) and don't move when you change the date range.</li></ul>
-          <b id="ht-6">Exploring a chart</b>
-          <ul><li>Ctrl/⌘ + scroll to zoom, drag to pan, double-click to reset.</li><li>On Time in Stage, the &#8249; handle hides the stage list so the chart gets full width.</li></ul>
-          <b id="ht-8">Counting quirks</b>
-          <ul><li>An implementation can be both CAREpoint and e-Bridge — counted once in the total but shown in both product columns, so product columns can add past the total. Nothing is double-counted.</li><li>Go-Lives bars show full weeks/months, so they can add past the headline. Trust the headline for totals, bars for shape.</li><li>PO to Go-Live only plots days something went live; quiet days aren't drawn.</li><li>No create date → left out of open counts. No PO date (or backwards dates) → skipped by the speed median. Real exports set these automatically.</li></ul>
-          <b id="ht-11">Your data</b>
-          <ul><li>Everything runs in your browser on DuckDB (the rules live in engine.sql). Nothing uploads anywhere.</li><li>Back up saves your history to a file, Restore loads it back, Reset wipes this browser. Back up before you reset.</li></ul>
+          <p style="margin:0 0 12px;color:var(--hint)">HubSpot shows today. This shows the trend over time. It opens to an import screen with optional sample dashboards, so you can look around before importing anything real.</p>
+          <b>Do this each month</b>
+          <ol style="margin:6px 0 4px;padding-left:20px">
+            <li style="margin-bottom:10px"><b>Export from HubSpot.</b>
+              <ul style="margin:4px 0 0">
+                <li>In HubSpot's top menu, click <b>CRM</b>, then <b>Implementations</b>.</li>
+                <li>Set the view to <b>All Implementations</b>. You want every record, both open and completed, not a filtered subset. A filtered view leaves records out and the numbers come out wrong.</li>
+                <li>Click <b>Export</b> (top right), choose <b>CSV</b>, and download the file.</li>
+                <li>Name it with the last day of the month, like <b>implementations_2026-06-30.csv</b>.</li>
+              </ul>
+            </li>
+            <li style="margin-bottom:8px"><b>Import the CSV.</b> Click <b>Import CSV</b> and choose the file you just saved. Re-importing a month replaces it, so the picture builds over time.</li>
+            <li style="margin-bottom:8px"><b>Read the three top cards.</b> <b>Open</b> is how many implementations are active, and whether that rose or fell since last month. <b>Where it's stuck</b> is the total amount of time work is sitting past its normal pace, added up across everything (a total amount of time, not a count of implementations), plus the stages causing most of it. <b>Delivery</b> is the typical number of days from PO to Go-Live, and how many went live.</li>
+            <li style="margin-bottom:8px"><b>Check where work is stuck.</b> Time in Stage lists stages worst first. "Days overdue" is the extra time work has spent past that stage's normal benchmark, added together across the items in that stage, not a number of implementations. Click a stage to chart it and see who's waiting. Stage Breakdown grades every stage at once.</li>
+            <li style="margin-bottom:8px"><b>Review Go-Lives / PO to Go-Live.</b> The typical wait to go live and what shipped this period. The "went live, not closed out" link lists records still open in HubSpot after their go-live date.</li>
+            <li style="margin-bottom:8px"><b>Save or share.</b> Open the &#8942; menu to export a PNG or PDF, or share a snapshot.</li>
+            <li><b>Back up history.</b> &#8942; menu &rarr; Back up saves your history to a file; Restore loads it back; Reset wipes this browser. Back up before you reset, and keep the file in GD's Drive.</li>
+          </ol>
+          <details style="margin-top:14px">
+            <summary style="cursor:pointer;color:var(--blue);font-weight:500">Required fields &amp; assumptions</summary>
+            <div style="margin-top:8px;color:var(--hint)">
+              <ul>
+                <li><b>Required columns</b> (exact HubSpot names): Record ID &middot; Implementation Name &middot; Implementation Type &middot; Implementation pipeline stage &middot; Time in current stage &middot; Date entered current stage &middot; PO Date &middot; Implementation Live/Complete &middot; Duration between PO date and Live/Complete Date &middot; Object create date/time. Also used when present: Estimated Go-Live Date and the per-stage "Date entered/exited &hellip; (Implementation Pipeline)" columns.</li>
+                <li><b>Timeframes:</b> pick a preset or exact dates; opens on the last full month. Product buttons (CAREpoint / e-Bridge) narrow most of the dashboard; the Open card currently stays on the combined total. Charts compare your range to the equal-length period right before it. Stage verdicts and overdue describe the latest import (30-day flow window) and don't move when you change the date range.</li>
+                <li><b>Colors:</b> green improving, red worsening, amber watch. The dotted line marks where the visible period started; below it is better than the start, above is worse.</li>
+                <li><b>Counting:</b> an implementation can be both CAREpoint and e-Bridge, counted once in the total but shown in both product columns, so product columns can add past the total. Nothing is double-counted. No create date leaves a record out of open counts; a missing or backward PO date is skipped by the speed median.</li>
+                <li><b>Charts:</b> Ctrl/&#8984; + scroll to zoom, drag to pan, double-click to reset. On Time in Stage, the &#8249; handle hides the stage list for full width.</li>
+                <li><b>Your data</b> runs in your browser on DuckDB (the rules live in engine.sql). Nothing uploads anywhere.</li>
+              </ul>
+            </div>
+          </details>
         </div>
         
       </section>
@@ -492,6 +504,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script type="module" src="app.js?v=45"></script>
+<script type="module" src="app.js?v=46"></script>
 </body>
 </html>

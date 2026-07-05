@@ -5,7 +5,7 @@
    Stage verdicts, days overdue, focus ranking, and data-quality notices come from the DuckDB
    engine (engine-db.js running engine.sql) — this file renders them and does no stage math. */
 import { GD_CONFIG } from "./config.js";
-import { initEngine, buildDashboardDb } from "./engine-db.js?v=45";
+import { initEngine, buildDashboardDb } from "./engine-db.js?v=46";
 const ENG_DAY = 86400000;
 
 const CONFIG = {
@@ -74,6 +74,18 @@ function parseCSV(text) {
   const h = rows[0].map(x => x.trim());
   return rows.slice(1).filter(r => r.some(v => v && v.trim())).map(r => { const o = {}; h.forEach((k, i) => o[k] = (r[i] || "").trim()); return o; });
 }
+const headerCache = new WeakMap();
+function normHeader(h) { return String(h ?? "").trim()
+  .replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/\s+/g, " ")
+  .replace(/^Date Entered /, "Date entered ").replace(/^Date Exited /, "Date exited ")
+  .replace(/\(Implementation Pipeline Stage\)/g, "(Implementation Pipeline)"); }
+function headerMap(row) {
+  let m = headerCache.get(row);
+  if (!m) { m = {}; for (const k of Object.keys(row || {})) if (!(normHeader(k) in m)) m[normHeader(k)] = k; headerCache.set(row, m); }
+  return m;
+}
+function hasCol(row, col) { return !!row && (col in row || normHeader(col) in headerMap(row)); }
+function cell(row, col) { if (!row) return ""; if (col in row) return row[col]; const k = headerMap(row)[normHeader(col)]; return k ? row[k] : ""; }
 function parseDate(v) { if (!v) return null; const s = String(v).trim(); if (!s) return null;
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
   m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (m) return new Date(Date.UTC(+m[3], +m[1] - 1, +m[2]));
@@ -85,21 +97,21 @@ function monthKey(d) { return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 
 function monthStart(k) { const [y, m] = k.split("-").map(Number); return new Date(Date.UTC(y, m - 1, 1)); }
 function snapshotMonthFromName(n) { const m = (n || "").match(CONFIG.filenameDateRegex); return m ? `${m[1]}-${m[2]}` : monthKey(new Date()); }
 function normalize(rows) { const C = CONFIG.columns;
-  const miss = Object.values(C).filter(c => rows.length && !(c in rows[0])); if (miss.length) throw new Error("Missing column(s): " + miss.join(", "));
-  const mapped = rows.map(r => { const live = parseDate(r[C.live_complete_date]), po = parseDate(r[C.po_date]);
+  const miss = Object.values(C).filter(c => rows.length && !hasCol(rows[0], c)); if (miss.length) throw new Error("Missing column(s): " + miss.join(", "));
+  const mapped = rows.map(r => { const live = parseDate(cell(r, C.live_complete_date)), po = parseDate(cell(r, C.po_date));
     const intervals = {};                              // per-stage entered/exited (for daily reconstruction)
     for (const s of CONFIG.pipelineStages) {
-      const en = parseDate(r[`Date entered "${s} (Implementation Pipeline)"`]);
-      if (en) intervals[s] = { enter: en, exit: parseDate(r[`Date exited "${s} (Implementation Pipeline)"`]) };
+      const en = parseDate(cell(r, `Date entered "${s} (Implementation Pipeline)"`));
+      if (en) intervals[s] = { enter: en, exit: parseDate(cell(r, `Date exited "${s} (Implementation Pipeline)"`)) };
     }
-    const stage = (r[C.current_stage] || "").trim();
+    const stage = (cell(r, C.current_stage) || "").trim();
     // Authoritative signals: went live = the date property; exited pipeline = the stage move
     // (timestamped by HubSpot's stage-entry date; fall back to the live date for legacy rows).
     const closedDate = (intervals[LIVE_STAGE] && intervals[LIVE_STAGE].enter) || (stage === LIVE_STAGE ? live : null);
-    return { id: (r[C.record_id] || "").trim(), name: (r[C.name] || "").trim(), types: resolveTypes(r[C.impl_type]),
-      stage, timeInStageDays: parseDurationDays(r[C.time_in_current_stage]),
-      poToLiveDays: parseDurationDays(r[C.duration_po_to_live]), poDate: po, liveDate: live, closedDate,
-      createDate: parseDate(r[C.create_date]), estLive: parseDate(r["Estimated Go-Live Date"]), isOpen: stage !== LIVE_STAGE, intervals }; }).filter(r => r.id);
+    return { id: (cell(r, C.record_id) || "").trim(), name: (cell(r, C.name) || "").trim(), types: resolveTypes(cell(r, C.impl_type)),
+      stage, timeInStageDays: parseDurationDays(cell(r, C.time_in_current_stage)),
+      poToLiveDays: parseDurationDays(cell(r, C.duration_po_to_live)), poDate: po, liveDate: live, closedDate,
+      createDate: parseDate(cell(r, C.create_date)), estLive: parseDate(cell(r, "Estimated Go-Live Date")), isOpen: stage !== LIVE_STAGE, intervals }; }).filter(r => r.id);
   const byId = new Map(); mapped.forEach(r => byId.set(r.id, r));   // dedupe by Record ID (last wins)
   return [...byId.values()]; }
 
@@ -110,17 +122,17 @@ function toEngineRecords(rows) {                          // HubSpot CSV rows ->
   return rows.map(r => {
     const events = {};
     for (const s of STAGE_COLS) {
-      const en = engDate(r[`Date entered "${s} (Implementation Pipeline)"`]);
-      const ex = engDate(r[`Date exited "${s} (Implementation Pipeline)"`]);
+      const en = engDate(cell(r, `Date entered "${s} (Implementation Pipeline)"`));
+      const ex = engDate(cell(r, `Date exited "${s} (Implementation Pipeline)"`));
       if (en || ex) events[s] = { enter: en, exit: ex };
     }
-    const cs = r["Implementation pipeline stage"] || "";
-    if (cs && !events[cs]) events[cs] = { enter: engDate(r["Date entered current stage"]), exit: null };
-    const t = r["Implementation Type"] || "";
+    const cs = cell(r, "Implementation pipeline stage") || "";
+    if (cs && !events[cs]) events[cs] = { enter: engDate(cell(r, "Date entered current stage")), exit: null };
+    const t = cell(r, "Implementation Type") || "";
     return {
-      id: r["Record ID"], name: r["Implementation Name"] || r["Record ID"],
+      id: cell(r, "Record ID"), name: cell(r, "Implementation Name") || cell(r, "Record ID"),
       product: t.includes(";") ? "Both" : t, currentStage: cs, events,
-      poDate: engDate(r["PO Date"]), liveDate: engDate(r["Implementation Live/Complete"]),
+      poDate: engDate(cell(r, "PO Date")), liveDate: engDate(cell(r, "Implementation Live/Complete")),
     };
   });
 }

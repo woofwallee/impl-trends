@@ -13,7 +13,7 @@ export function initEngine() {
     const db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING), worker);
     await db.instantiate(new URL("./vendor/duckdb/duckdb-eh.wasm", import.meta.url).href);
     const conn = await db.connect();
-    const text = await (await fetch("engine.sql?v=45")).text();   // keep ?v in step with app.js?v= in index.html (GitHub Pages caches ~10min)
+    const text = await (await fetch("engine.sql?v=46")).text();   // keep ?v in step with app.js?v= in index.html (GitHub Pages caches ~10min)
     // strip -- comments, split on ';' (no semicolons inside the recipe's string literals)
     const stmts = text.split("\n").map(l => l.split("--")[0]).join("\n")
       .split(";").map(s => s.trim()).filter(Boolean);
