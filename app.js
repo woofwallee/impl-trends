@@ -635,14 +635,11 @@ function renderPendPanel(store) {
   el.classList.toggle("hidden", !pendOpen);
   if (!pendOpen) return;
   const pc = (store.pendingClose || []).filter(p => cohort === "all" || (p.types || []).includes(cohort));
-  el.innerHTML = `<div class="row-h" style="margin-bottom:4px"><div><h3 style="font-size:13px">WENT LIVE, NOT CLOSED OUT</h3><p class="ch-sub">waiting for the stage move in HubSpot · longest wait first · as of the latest import</p></div><span><button class="btn" id="pendCopy">Copy list</button> <button class="btn" id="pendClose">Close</button></span></div>`
-    + (pc.length ? pc.map(p => `<div class="pend-row"><span class="pn" title="${escHtml(p.name)}">${escHtml(p.name)}</span><span class="pm">${escHtml(p.stage)}</span><span class="pm">went live ${fmtDay(p.live)}</span><span class="pm">${p.days}d waiting</span></div>`).join("")
+  el.innerHTML = `<div class="row-h" style="margin-bottom:4px"><div class="hd"><h3 style="font-size:13px">WENT LIVE, NOT CLOSED OUT</h3><span class="qmark" title="Waiting for the stage move in HubSpot · longest wait first · as of the latest import"></span></div><button class="btn" id="pendClose">Close</button></div>`
+    + (pc.length ? `<div class="pend-head"><span>Company</span><span>Stage</span><span>Went Live</span><span>Status</span></div>`
+        + pc.map(p => `<div class="pend-row"><span class="pn" title="${escHtml(p.name)}">${escHtml(p.name)}</span><span class="pm">${escHtml(p.stage)}</span><span class="pm">${fmtDay(p.live)}</span><span class="pm">${p.days}d waiting</span></div>`).join("")
                  : `<div style="color:var(--hint);padding:14px 0">No one is waiting on close-out.</div>`);
   const x = document.getElementById("pendClose"); if (x) x.addEventListener("click", () => { pendOpen = false; renderPendPanel(loadStore()); });
-  const cp = document.getElementById("pendCopy"); if (cp) cp.addEventListener("click", () => {
-    const lines = pc.map(p => `${p.name} — ${p.stage} — went live ${fmtDay(p.live)} — ${p.days}d waiting`).join("\n");
-    navigator.clipboard.writeText(lines).then(() => toast("List copied.")).catch(() => toast("Copy failed.", true));
-  });
 }
 function renderDrill(eng, stage) {                        // named records waiting in the selected stage (engine-computed, oldest first)
   const box = document.getElementById("stageDrill"); if (!box) return;
