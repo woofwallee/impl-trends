@@ -75,6 +75,16 @@
   .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
   .card h3{font-size:14px;font-weight:600;margin:0}
   .card .ch-sub{font-size:12px;color:var(--hint);margin:2px 0 0}
+  .hd{display:flex;align-items:center;gap:0}
+  .qmark{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid var(--line);color:var(--hint);font-size:10px;font-weight:700;cursor:help;margin-left:8px;flex:none;user-select:none}
+  .qmark::after{content:"?"}
+  .qmark:hover{border-color:var(--blue);color:var(--blue)}
+  .sample-pill{display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:#b7791f;background:rgba(240,162,78,.18);border-radius:20px;padding:2px 9px;margin-left:12px;vertical-align:middle;cursor:help;letter-spacing:.2px}
+  .last-import{font-size:11.5px;color:var(--hint);white-space:nowrap;align-self:center;margin-right:2px}
+  .last-import b{color:var(--muted);font-weight:600}
+  .htbody>b{display:block;margin-top:16px;color:var(--ink);font-size:14px}
+  .htbody ul{margin:5px 0 0;padding-left:20px;color:var(--muted)}
+  .htbody li{margin:3px 0}
   .grid-kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:16px}
   .scopebar{background:var(--tile);border:1px solid var(--line);border-radius:12px;padding:11px 15px;font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.5}
   .kpi .kl{display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:13px}
@@ -175,7 +185,7 @@
   .kfoot b{color:var(--ink);font-weight:600;font-size:12.5px}
   .linky{background:none;border:none;color:var(--blue);cursor:pointer;font:inherit;font-size:inherit;padding:0;text-decoration:underline;text-underline-offset:2px}
   #sbTable{overflow-x:auto}
-  .sb-grid{display:grid;grid-template-columns:minmax(160px,1fr) 110px 90px 96px 70px 100px 84px;gap:8px;align-items:center;min-width:660px}
+  .sb-grid{display:grid;grid-template-columns:minmax(190px,1.3fr) 118px 128px 116px 66px 116px 104px;gap:10px;align-items:center;min-width:840px}
   .sb-h{padding:9px 10px 7px;border-bottom:1px solid var(--line);font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--hint);font-weight:600;cursor:pointer;user-select:none}
   .sb-h:hover{color:var(--ink)}
   .sb-h.on{color:var(--ink)}
@@ -184,8 +194,6 @@
   .sb-row:hover{background:var(--tile)}
   .sb-r{text-align:right}
   .sb-name{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #demoBanner{background:#b7791f;color:#fff;border-radius:10px;padding:9px 14px;font-size:13px;font-weight:600;margin-bottom:14px;text-align:center}
-  #demoBanner.hidden{display:none}
   #stageWarn{background:#b7791f;color:#fff;border-radius:10px;padding:9px 14px;font-size:13px;font-weight:600;margin-bottom:14px;text-align:center}
   #stageWarn.hidden{display:none}
   .inote{display:flex;align-items:center;gap:10px;justify-content:space-between;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:9px 14px;font-size:12.5px;color:var(--muted);margin-bottom:14px}
@@ -193,7 +201,6 @@
   .inote.hidden{display:none}
   .inote button#importNoteX{background:none;border:none;font-size:16px;cursor:pointer;color:var(--hint)}
   .pill.worse{}
-  #stageInsights{display:flex;flex-direction:column;gap:5px;margin-top:6px}
   .ins-card{display:grid;grid-template-columns:14px 218px 1fr auto;align-items:baseline;gap:9px;width:100%;text-align:left;border:1px solid var(--line);background:var(--panel);border-radius:9px;padding:8px 12px;font-size:12.5px;line-height:1.5;color:var(--muted);cursor:pointer;font-family:inherit}
   .ins-card.flat{display:flex}
   .ins-card b{color:var(--ink);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
@@ -203,8 +210,6 @@
   .ins-card.flat{cursor:default}
   .ins-card.flat:hover{background:var(--panel)}
   .ins-dot{width:8px;height:8px;border-radius:50%;flex:none;align-self:center}
-  .act-line{display:flex;align-items:baseline;gap:9px;font-size:12.5px;line-height:1.5;color:var(--muted);margin:2px 0 14px}
-  .act-line b{color:var(--ink);font-weight:600}
   .ins-dot.red{background:#FF4D5A}.ins-dot.amber{background:#f0a24e}.ins-dot.green{background:#00C896}.ins-dot.flat{background:#9aa2af}
   .wl{border-right:1px solid var(--line)}
   .wl-row{display:grid;grid-template-columns:1fr 40px 46px 74px;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line2);cursor:pointer}
@@ -250,7 +255,6 @@
       <a class="sub" tabindex="0" data-goto="sec-stage"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Time in Stage</a>
       <a class="sub" tabindex="0" data-goto="sec-speed"><svg class="ic" viewBox="0 0 24 24"><path d="M13 2L3 14h7l-1 8 10-12h-7z"/></svg>PO to Go-Live</a>
       <div class="nav-cap">Views</div>
-      <a tabindex="0" data-view="snapshot"><svg class="ic" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>Snapshot</a>
       <a tabindex="0" data-view="stagebd"><svg class="ic" viewBox="0 0 24 24"><path d="M3 5h18M3 10h18M3 15h18M3 20h12"/></svg>Stage Breakdown</a>
       <a tabindex="0" data-view="history"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 109-9 9.7 9.7 0 00-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>Import History</a>
       <a tabindex="0" data-view="howto"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 015.8 1c0 2-3 2.5-3 4"/><path d="M12 17.5h.01"/></svg>How to Use</a>
@@ -261,7 +265,7 @@
 
   <main class="main">
     <div class="top">
-      <div><h1>IMPLEMENTATION PIPELINE</h1><div class="sub" id="subtitle"></div></div>
+      <div><h1 style="display:flex;align-items:center;flex-wrap:wrap">IMPLEMENTATION PIPELINE<span id="samplePill" class="sample-pill hidden" title="Nothing here is a company number · import your HubSpot export to see real numbers">Sample data</span></h1><div class="sub" id="subtitle"></div></div>
       <div class="tools">
         <span class="tf" id="cohortSel" title="Filter the whole dashboard by product">
           <button data-c="all" class="on">All</button><button data-c="CAREpoint">CAREpoint</button><button data-c="e-Bridge">e-Bridge</button>
@@ -287,6 +291,7 @@
           <button id="pngBtn"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg>Download PNG</button>
           <button id="pdfBtn"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>Download PDF</button>
         </div></details>
+        <span class="last-import" id="lastImport"></span>
         <button class="btn primary" id="importBtn"><svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Import</button>
         <details class="menu"><summary class="iconbtn" title="Data options"><svg class="ic" viewBox="0 0 24 24" style="width:18px;height:18px"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></summary><div class="menu-pop">
           <button id="backup"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Back up history</button>
@@ -298,11 +303,9 @@
       </div>
     </div>
 
-    <div id="snapshot" class="hidden"></div>
-
     <div id="stagebd" class="hidden">
       <section class="card">
-        <div class="row-h"><div><h3>Stage breakdown</h3><p class="ch-sub" id="sbSub"></p></div>
+        <div class="row-h"><div class="hd"><h3>Stage breakdown</h3><span class="qmark" id="sbSub" title=""></span></div>
         <span><button class="btn" id="sbPng">Download PNG</button> <button class="btn" id="sbBack">&larr; Back to dashboard</button></span></div>
         <div id="sbTable"></div>
       </section>
@@ -310,7 +313,7 @@
 
     <div id="history" class="hidden">
       <section class="card">
-        <div class="row-h"><div><h3>Import history</h3><p class="ch-sub">Every export imported into this dashboard · newest first · stored in this browser · keeps the most recent 12 files</p></div>
+        <div class="row-h"><div class="hd"><h3>Import history</h3><span class="qmark" title="Every export imported into this dashboard · newest first · stored in this browser · keeps the most recent 12 files"></span></div>
         <button class="btn" id="histBack">← Back to dashboard</button></div>
         <div id="histList" style="margin-top:14px"></div>
       </section>
@@ -323,24 +326,28 @@
 
     <div id="howto" class="hidden">
       <section class="card" style="max-width:860px">
-        <div class="row-h"><div><h3>How to use</h3><p class="ch-sub">Documentation and reference for this dashboard</p></div>
+        <div class="row-h"><div><h3>How to use</h3></div>
         <button class="btn" id="howtoBack">← Back to dashboard</button></div>
-        <div style="font-size:13.5px;line-height:1.7;margin-top:14px;color:var(--ink);max-width:720px">
-          <div style="font-size:12px;line-height:2;margin-bottom:12px;color:var(--hint)">Jump to: <a href="#ht-0" style="color:var(--blue);text-decoration:none">What this is</a> · <a href="#ht-1" style="color:var(--blue);text-decoration:none">The monthly routine</a> · <a href="#ht-2" style="color:var(--blue);text-decoration:none">Getting the export right</a> · <a href="#ht-3" style="color:var(--blue);text-decoration:none">Reading the dashboard</a> · <a href="#ht-4" style="color:var(--blue);text-decoration:none">What the colors mean</a> · <a href="#ht-5" style="color:var(--blue);text-decoration:none">Timeframes and comparisons</a> · <a href="#ht-6" style="color:var(--blue);text-decoration:none">Exploring a chart</a> · <a href="#ht-7" style="color:var(--blue);text-decoration:none">The stage alerts</a> · <a href="#ht-8" style="color:var(--blue);text-decoration:none">Why product counts can add past the total</a> · <a href="#ht-9" style="color:var(--blue);text-decoration:none">Why PO to Go-Live has gaps</a> · <a href="#ht-10" style="color:var(--blue);text-decoration:none">Implementations that can't be counted</a> · <a href="#ht-11" style="color:var(--blue);text-decoration:none">Your data</a></div>
-          <b id="ht-0">What this is</b><br><span style="color:var(--muted)">HubSpot shows you today. This dashboard shows you the trend. Import your monthly export and see how open implementations, stage times, and delivery speed are moving, and whether they're getting better or worse. The app opens with sample data so you can explore first. Your first real import replaces it.</span><br><br>
-          <b id="ht-1">The monthly routine</b><br><span style="color:var(--muted)">1. Export all Implementation records from HubSpot. 2. Import the CSV here. 3. That's it. The dashboard updates and remembers that month, so the picture builds over time.</span><br><br>
-          <b id="ht-2">Getting the export right</b><br><span style="color:var(--muted)">In HubSpot go to CRM &rarr; Implementations, open the <b>All Implementations</b> view, and clear every filter before exporting. The dashboard needs open AND completed implementations: any leftover filter (owner, stage, date) shrinks the file, skews history, and triggers the size warning on import. Then Export &rarr; file format <b>CSV</b> &rarr; include the properties <b>in your view's columns</b> (your standard 45-column view has everything; "All properties on records" also works but makes a much larger file). Name the file <b>implementations_YYYY-MM-DD.csv</b> so the app knows which month it counts as.<br><br>
-          <b style="color:var(--ink)">The 10 properties that must be in the export (exact HubSpot names):</b> Record ID &middot; Implementation Name &middot; Implementation Type &middot; Implementation pipeline stage &middot; Time in current stage &middot; Date entered current stage &middot; PO Date &middot; Implementation Live/Complete &middot; Duration between PO date and Live/Complete Date &middot; Object create date/time. Also used when present: Estimated Go-Live Date (feeds the next-30-days line) and the per-stage "Date entered/exited &hellip; (Implementation Pipeline)" columns (they power Time in Stage; your view already has all of them). Every one of these names was verified against the real exports and the live pipeline on Jul 3, 2026.</span><br><br>
-          <b id="ht-3">Reading the dashboard</b><br><span style="color:var(--muted)">The four cards up top give you the trend, not the number: Rising, Steady, or Falling for open work, each product, and Go-Lives, always compared to the period before yours (within 2% counts as Steady). The small line under each verdict carries the exact count and change. The charts below hold the detail. Open Pipeline Trend shows whether open work is piling up or clearing. Time in Stage shows where work is stuck: every stage learns its own benchmark from its history, and Overdue counts the days open work has sat past that. The list is ranked by Overdue, biggest bottleneck first, and each stage carries a verdict — Aging (work stuck past benchmark), Backlog building (arriving faster than leaving), Watch, Stalled, Clearing, or Steady; hover any verdict for the rule and the numbers behind it. Click a stage to chart it; the panel under the chart names the implementations waiting there, oldest first. The Stage Breakdown page in the sidebar grades every stage at once with the same verdicts, plus Concentration (High = 10%+ of open work) and Typical (that stage's usual days); every column sorts on click. The Snapshot page turns the same data into a leadership-ready summary you can copy or download. PO to Go-Live shows the median wait from Purchase Order to Go-Live. Go-Lives counts what actually shipped. Implementations that went live but haven't been moved to the Live/Complete stage in HubSpot are cleanup work waiting on someone. The Go-Lives chart shows a "went live but not closed out" link when any exist; click it to see exactly which implementations are waiting, by name. The count next to each stage in Time in Stage is how many implementations are sitting there right now, and the line under the pipeline chart shows how many started, how many closed out, and the net change for your period.</span><br><br>
-          <b id="ht-4">What the colors mean</b><br><span style="color:var(--muted)">Green means improving. Red means worsening. Amber means watch it — a stage that's filling up, stalled, or worth a look before it turns red. The dotted line on each chart marks where the visible period started. Green below that line means better than the start, red above it means worse. Go-Lives bars stay neutral blue because they're a simple count. Its change pill turns green when more went live than the period before.</span><br><br>
-          <b id="ht-5">Timeframes and comparisons</b><br><span style="color:var(--muted)">Pick a preset (Last month, 1M, 3M, 6M, 1Y, All) or set exact dates. The app opens on the last full calendar month and remembers your choice next time. Today snaps the end date to the most recent data day. The product buttons (All, CAREpoint, e-Bridge) filter the whole dashboard to one product. Charts, the trend cards, and their change pills recalculate for your date range, always compared to the equal-length period right before it. Stage verdicts and Overdue work differently: they describe the state of the latest import, with activity over the 30 days before it, so they don't move when you change the date range. Charts show exactly the period you selected, so the trend pill and the line always describe the same window. Zoom in for detail any time.</span><br><br>
-          <b id="ht-6">Exploring a chart</b><br><span style="color:var(--muted)">Hold Ctrl (or ⌘ on Mac) and scroll to zoom, so normal page scrolling never moves a chart. Drag to pan. Double-click to reset. The floating bar at the bottom of each big chart does the same with buttons: zoom in and out, step back and forward through time, reset. On Time in Stage, the &#8249; handle tucks the stage list away so the chart gets the full width. Press it again to bring the list back.</span><br><br>
-          <b id="ht-7">Where to look first</b><br><span style="color:var(--muted)">The stage list on the left of Time in Stage is the focus list: stages ranked by days overdue, biggest bottleneck first. The line just under the section heading calls out what your team can act on first (versus what's customer-blocked). Click any stage to chart it; the drill-down below the chart names every implementation waiting there, oldest first. The list updates with every import and product filter.</span><br><br>
-          <b id="ht-8">Why product counts can add past the total</b><br><span style="color:var(--muted)">An implementation can be both CAREpoint and e-Bridge. It counts once in the total but shows up in both product columns, so 163 + 87 can exceed a total of 217. Nothing is double-counted.</span><br><br>
-          <b>Why Go-Lives bars may not match the headline</b><br><span style="color:var(--muted)">Bars show full weeks or months. If your period starts mid-month, the first bar still shows the whole month, so the bars can add past the headline. The headline is always the exact count for your dates. Trust the headline for totals, the bars for shape.</span><br><br>
-          <b id="ht-9">Why PO to Go-Live has gaps</b><br><span style="color:var(--muted)">That chart only plots days when something went live. Quiet days aren't drawn, so points sit closer together than the calendar would suggest when you zoom in to daily detail.</span><br><br>
-          <b id="ht-10">Implementations that can't be counted</b><br><span style="color:var(--muted)">An implementation without a create date can't be placed on the timeline, so it's left out of the open counts. The speed average skips implementations with no Purchase Order date, or where the dates run backwards. Real HubSpot exports set these automatically, so this mostly matters for hand-edited files.</span><br><br>
-          <b id="ht-11">Your data</b><br><span style="color:var(--muted)">Everything runs in your browser — the math runs on DuckDB, a trusted database engine embedded in this page, executing the readable rules in engine.sql. Nothing uploads anywhere. Back up saves your history to a file, Restore loads it back, and Reset wipes this browser clean. Back up before you reset.</span>
+        <div class="htbody" style="font-size:13.5px;line-height:1.6;margin-top:6px;max-width:720px">
+          <div style="font-size:12px;line-height:2;margin-bottom:4px;color:var(--hint)">Jump to: <a href="#ht-0" style="color:var(--blue);text-decoration:none">What this is</a> · <a href="#ht-1" style="color:var(--blue);text-decoration:none">Monthly routine</a> · <a href="#ht-2" style="color:var(--blue);text-decoration:none">The export</a> · <a href="#ht-3" style="color:var(--blue);text-decoration:none">Reading it</a> · <a href="#ht-4" style="color:var(--blue);text-decoration:none">Colors</a> · <a href="#ht-5" style="color:var(--blue);text-decoration:none">Timeframes</a> · <a href="#ht-6" style="color:var(--blue);text-decoration:none">Charts</a> · <a href="#ht-8" style="color:var(--blue);text-decoration:none">Counting quirks</a> · <a href="#ht-11" style="color:var(--blue);text-decoration:none">Your data</a></div>
+          <b id="ht-0">What this is</b>
+          <ul><li>HubSpot shows today; this shows the trend over time.</li><li>Import your monthly export to track open implementations, stage times, and delivery speed.</li><li>Opens with sample data — your first real import replaces it.</li></ul>
+          <b id="ht-1">Monthly routine</b>
+          <ul><li>Export all Implementation records from HubSpot.</li><li>Import the CSV here.</li><li>The dashboard remembers each month, so the picture builds over time.</li></ul>
+          <b id="ht-2">Getting the export right</b>
+          <ul><li>CRM &rarr; Implementations &rarr; <b>All Implementations</b> view, <b>every filter cleared</b> (open and completed both matter).</li><li>Export &rarr; <b>CSV</b>, properties in your view's columns (the standard 45-column view has everything).</li><li>Name it <b>implementations_YYYY-MM-DD.csv</b>.</li><li>Must include (exact HubSpot names): Record ID · Implementation Name · Implementation Type · Implementation pipeline stage · Time in current stage · Date entered current stage · PO Date · Implementation Live/Complete · Duration between PO date and Live/Complete Date · Object create date/time. Also used when present: Estimated Go-Live Date and the per-stage "Date entered/exited … (Implementation Pipeline)" columns.</li></ul>
+          <b id="ht-3">Reading the dashboard</b>
+          <ul><li><b>Top cards</b> — trend (Rising / Steady / Falling) vs the period before, for open work, each product, and Go-Lives.</li><li><b>Open Pipeline Trend</b> — whether open work is piling up or clearing.</li><li><b>Time in Stage</b> — where work is stuck. Overdue = days open work sits past a stage's benchmark; ranked biggest bottleneck first. Click a stage to chart it and see who's waiting.</li><li><b>Stage Breakdown</b> — every stage graded at once, with sortable columns.</li><li><b>PO to Go-Live / Go-Lives</b> — median wait to go live, and what shipped (plus a "went live but not closed out" link).</li></ul>
+          <b id="ht-4">What the colors mean</b>
+          <ul><li>Green = improving, red = worsening, amber = watch.</li><li>The dotted line marks where the visible period started: below it is better than the start, above is worse.</li><li>Go-Lives bars are neutral (a count); the change pill greens when more shipped than the period before.</li></ul>
+          <b id="ht-5">Timeframes and comparisons</b>
+          <ul><li>Pick a preset or set exact dates; opens on the last full month. Product buttons filter the whole dashboard.</li><li>Charts and trend pills recalc for your range vs the equal-length period right before it.</li><li>Stage verdicts and Overdue describe the latest import (30-day flow window) and don't move when you change the date range.</li></ul>
+          <b id="ht-6">Exploring a chart</b>
+          <ul><li>Ctrl/⌘ + scroll to zoom, drag to pan, double-click to reset.</li><li>On Time in Stage, the &#8249; handle hides the stage list so the chart gets full width.</li></ul>
+          <b id="ht-8">Counting quirks</b>
+          <ul><li>An implementation can be both CAREpoint and e-Bridge — counted once in the total but shown in both product columns, so product columns can add past the total. Nothing is double-counted.</li><li>Go-Lives bars show full weeks/months, so they can add past the headline. Trust the headline for totals, bars for shape.</li><li>PO to Go-Live only plots days something went live; quiet days aren't drawn.</li><li>No create date → left out of open counts. No PO date (or backwards dates) → skipped by the speed median. Real exports set these automatically.</li></ul>
+          <b id="ht-11">Your data</b>
+          <ul><li>Everything runs in your browser on DuckDB (the rules live in engine.sql). Nothing uploads anywhere.</li><li>Back up saves your history to a file, Restore loads it back, Reset wipes this browser. Back up before you reset.</li></ul>
         </div>
         
       </section>
@@ -364,7 +371,6 @@
     </div>
 
     <div id="dashboard" class="hidden">
-      <div id="demoBanner" class="hidden">Sample data · nothing here is a company number · import your HubSpot export to see real numbers</div>
       <div id="stageWarn" class="hidden"></div>
       <div id="importNote" class="inote hidden"><span id="importNoteMsg"></span><button id="importNoteX" title="Dismiss">&times;</button></div>
       <section class="grid-kpi" id="kpis"></section>
@@ -372,7 +378,7 @@
 
       <!-- Story order: how much work → is it growing → where is it stuck → what it does to timelines → what we shipped -->
       <section class="card" id="sec-backlog" style="margin-bottom:16px">
-        <div class="row-h"><div><h3>OPEN PIPELINE TREND</h3><p class="ch-sub">Every implementation still in progress · each one stays open until it reaches Live/Complete</p></div><div id="backlogPill"></div></div>
+        <div class="row-h"><div class="hd"><h3>OPEN PIPELINE TREND</h3><span class="qmark" title="Every implementation still in progress · each one stays open until it reaches Live/Complete"></span></div><div id="backlogPill"></div></div>
         <div class="hero-n"><span id="backlogNow">0</span><small>open</small></div>
         <div class="canvas-wrap" style="height:240px"><canvas id="backlogChart"></canvas></div>
         <div class="breakdown" id="breakdown"></div>
@@ -380,8 +386,7 @@
       </section>
 
       <section class="card" id="sec-stage" style="margin-bottom:16px">
-        <div class="row-h"><div><h3>TIME IN STAGE</h3><p class="ch-sub">Overdue = days past the stage's own benchmark · last 30 days before import · click a stage to chart it</p></div><div id="stageSummary" class="mktsum"></div></div>
-        <div id="stageInsights"></div>
+        <div class="row-h"><div class="hd"><h3>TIME IN STAGE</h3><span class="qmark" title="Overdue = days a stage's open work sits past its own benchmark · flow window is the 30 days before import · click a stage to chart it"></span></div><div id="stageSummary" class="mktsum"></div></div>
         <div class="stage-wrap" id="stageWrap">
           <div class="wl">
             <div class="wl-hdr" id="wlHdr"><span>Stage</span><span class="h-r" title="open implementations sitting in the stage">Open</span><span class="h-r" title="days overdue: how far the stage's open work is past its own benchmark · list is sorted by this, biggest bottleneck first">Overdue</span><span class="h-r" title="the stage's verdict · hover a verdict for the rule behind it">Status</span></div>
@@ -389,8 +394,7 @@
           </div>
           <button type="button" class="wl-toggle" id="wlToggle" title="Hide stage list" aria-expanded="true" aria-controls="stageList" aria-label="Hide stage list">&#8249;</button>
           <div class="chartpane">
-            <div class="cp-h"><span class="cp-name" id="cpName">—</span><span class="cp-price" id="cpPrice">—</span><span id="cpBadge"></span><span id="cpReadout" style="color:var(--muted);font-size:13px"></span></div>
-            <p class="ch-sub" id="cpSub">Avg days in this stage over time · hover to read a day · Ctrl or ⌘ + scroll to zoom · drag to pan · double-click to reset</p>
+            <div class="cp-h"><span class="cp-name" id="cpName">—</span><span class="cp-price" id="cpPrice">—</span><span id="cpBadge"></span><span class="qmark" id="cpSub" title="Avg days in this stage over time · hover to read a day · Ctrl or ⌘ + scroll to zoom · drag to pan · double-click to reset"></span><span id="cpReadout" style="color:var(--muted);font-size:13px"></span></div>
             <div class="canvas-wrap" style="height:300px;margin-top:10px"><canvas id="stageBig"></canvas></div>
             <div id="stageDrill" class="hidden" style="margin-top:14px;max-height:240px;overflow:auto"></div>
           </div>
@@ -399,7 +403,7 @@
 
       <!-- Exploratory chart: full-width + tall + controls, same class as the backlog chart -->
       <section class="card" id="sec-speed" style="margin-bottom:16px">
-        <div class="row-h"><div><h3>PO TO GO-LIVE</h3><p class="ch-sub">Median time from Purchase Order to Go-Live, in days</p></div><div id="speedPill"></div></div>
+        <div class="row-h"><div class="hd"><h3>PO TO GO-LIVE</h3><span class="qmark" title="Median time from Purchase Order to Go-Live, in days"></span></div><div id="speedPill"></div></div>
         <div class="hero-n"><span id="speedNow">—</span><small>days</small></div>
         <div class="canvas-wrap" style="height:240px"><canvas id="speedChart"></canvas></div>
         <div id="speedCap" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
@@ -407,7 +411,7 @@
 
       <!-- Outcome metric: full-width but SHORT, no controls — a report line, not an exploration surface -->
       <section class="card" id="sec-golive">
-        <div class="row-h"><div><h3>GO-LIVES</h3><p class="ch-sub" id="goliveSub">How many implementations went live</p></div><div id="golivePill"></div></div>
+        <div class="row-h"><div class="hd"><h3>GO-LIVES</h3><span class="qmark" id="goliveSub" title="How many implementations went live"></span></div><div id="golivePill"></div></div>
         <div class="hero-n" style="font-size:26px;margin:8px 0 2px"><span id="goliveNow">0</span><small>went live</small></div>
         <div class="canvas-wrap" style="height:110px"><canvas id="goliveChart"></canvas></div>
         <div id="goliveCap" style="font-size:12px;color:var(--muted);margin-top:8px"></div>
@@ -417,6 +421,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script type="module" src="app.js?v=38"></script>
+<script type="module" src="app.js?v=39"></script>
 </body>
 </html>

@@ -5,7 +5,7 @@
    Stage verdicts, days overdue, focus ranking, and data-quality notices come from the DuckDB
    engine (engine-db.js running engine.sql) — this file renders them and does no stage math. */
 import { GD_CONFIG } from "./config.js";
-import { initEngine, buildDashboardDb } from "./engine-db.js?v=38";
+import { initEngine, buildDashboardDb } from "./engine-db.js?v=39";
 const ENG_DAY = 86400000;
 
 const CONFIG = {
@@ -641,20 +641,6 @@ function renderPendPanel(store) {
     navigator.clipboard.writeText(lines).then(() => toast("List copied.")).catch(() => toast("Copy failed.", true));
   });
 }
-function renderFocus(eview) {                             // act-first line only; the watchlist above IS the ranked focus list
-  const box = document.getElementById("stageInsights"); if (!box) return;
-  const rowsF = (eview && eview.focusRows) || [];
-  if (!rowsF.length) {
-    box.innerHTML = `<div class="act-line"><span class="ins-dot flat"></span><span>Nothing is overdue · no stage is holding work past its benchmark</span></div>`;
-    return;
-  }
-  const act = (eview.actFirst || []);
-  const bld = (eview.buildingRows || []);
-  box.innerHTML = `<div class="act-line"><span class="ins-dot flat"></span><span>${act.length
-      ? `Act first — owned by our team: <b>${act.join(", ")}</b>`
-      : `Top bottlenecks are customer-blocked · follow up with the customer`}${bld.length
-      ? ` · also growing (more arriving than closing): ${bld.map(b => `${b.stage} +${b.net}`).join(", ")}` : ""}</span></div>`;
-}
 function renderDrill(eng, stage) {                        // named records waiting in the selected stage (engine-computed, oldest first)
   const box = document.getElementById("stageDrill"); if (!box) return;
   const items = (eng && stage && eng.items[stage]) || [];
@@ -669,7 +655,6 @@ function renderDrill(eng, stage) {                        // named records waiti
 function render(store) {
   const dash = document.getElementById("dashboard"), empty = document.getElementById("empty");
   if (currentView !== "dash") { dash.classList.add("hidden"); empty.classList.add("hidden");
-    if (currentView === "snapshot") renderSnapshot();                    // product changes refresh the snapshot live
     if (!store.lastImport) return;
     if (currentView === "stagebd") renderStageBd(); }                   // timeframe/product changes refresh the breakdown live
   else if (!store.lastImport) { dash.classList.add("hidden"); empty.classList.remove("hidden"); return; }
@@ -795,7 +780,7 @@ function render(store) {
     const past = estC.filter(e => e.d <= bounds[1]).length;
     if (estC.length) estLine = ` · ${nEst} of ${estC.length} with estimate dates due by ${fmtDay(hEnd)}${past ? ` · ${past} past due` : ""}`;
   }
-  document.getElementById("goliveSub").textContent = `How many implementations went live · each bar is one ${glBucket}` + estLine;
+  document.getElementById("goliveSub").title = `How many implementations went live · each bar is one ${glBucket}` + estLine;
   document.getElementById("goliveNow").textContent = glWinTotal.toLocaleString();
   document.getElementById("golivePill").innerHTML = goliveDelta != null ? pill(goliveDelta, false) + ` <span style="font-size:12px;color:var(--hint)">vs ${priorName}</span>` : "";
   barChart("goliveChart", glKeys.map(k => ({ m: k, v: glAll[k] })), glFmt, glBucket, viewRange);
@@ -885,7 +870,7 @@ function render(store) {
   if (sel && sdDays.length) {
     // Same baseline-chart implementation as OPEN PIPELINE TREND / PO TO GO-LIVE (areaChart), full daily history.
     const fullArr = stageArr(sel.stage);
-    document.getElementById("cpSub").textContent = `Daily detail · hover to read · ${MODLBL} + scroll to zoom · drag to pan · double-click to reset`;
+    document.getElementById("cpSub").title = `Daily detail · hover to read · ${MODLBL} + scroll to zoom · drag to pan · double-click to reset`;
     areaChart("stageBig", sdDays.map((d, i) => ({ m: d, v: fullArr[i] })), 300, fmtDay, viewRange, {
       tooltipLabel: c => c.parsed.y == null ? " no open work" : ` ${c.parsed.y} days`,
       onHover: (e, els) => { const c = charts["stageBig"]; if (!c) return; const pr = document.getElementById("cpPrice"), ro = document.getElementById("cpReadout");
@@ -897,7 +882,6 @@ function render(store) {
     el.onmouseleave = e => { if (syncLeave) syncLeave(e);
       document.getElementById("cpPrice").textContent = selAvg != null ? selAvg + "d" : "—"; document.getElementById("cpReadout").textContent = ""; };
   }
-  renderFocus(eview);
   renderDrill(eng, sel ? sel.stage : null);
 
   const eb = eview ? eview.execBand : null;
@@ -909,10 +893,10 @@ function render(store) {
 
   const dataThrough = bounds ? bounds[1] : null;
   const importedOn = store.lastImport.when ? store.lastImport.when.slice(0, 10) : null;
-  document.getElementById("subtitle").textContent = `${store.lastImport.records.toLocaleString()} implementations · ${fmtDay(viewRange.from)} to ${fmtDay(viewRange.to)}`
-    + (dataThrough ? ` · data through ${fmtDay(dataThrough)}` : "") + (importedOn ? ` · imported ${fmtDay(importedOn)}` : "")
-    + (store.demo ? " · SAMPLE DATA" : "");
-  const dB = document.getElementById("demoBanner"); if (dB) dB.classList.toggle("hidden", !store.demo);
+  document.getElementById("subtitle").textContent = `${store.lastImport.records.toLocaleString()} implementations · Showing ${fmtDay(viewRange.from)} – ${fmtDay(viewRange.to)}`
+    + (dataThrough ? ` · Data through ${fmtDay(dataThrough)}` : "");
+  const sp = document.getElementById("samplePill"); if (sp) sp.classList.toggle("hidden", !store.demo);
+  const li = document.getElementById("lastImport"); if (li) li.innerHTML = importedOn ? `Last import <b>${fmtDay(importedOn)}</b>` : "";
   renderPendPanel(store);
   const sW = document.getElementById("stageWarn");
   if (sW) { const u = store.unknownStages || [];
@@ -1051,11 +1035,10 @@ function fmtDateTime(iso) { const d = new Date(iso); return d.toLocaleDateString
 
 function showView(v) {
   currentView = v;
-  const hist = document.getElementById("history"), howto = document.getElementById("howto"), sbd = document.getElementById("stagebd"), snp = document.getElementById("snapshot");
+  const hist = document.getElementById("history"), howto = document.getElementById("howto"), sbd = document.getElementById("stagebd");
   hist.classList.toggle("hidden", v !== "history");
   howto.classList.toggle("hidden", v !== "howto");
   if (sbd) sbd.classList.toggle("hidden", v !== "stagebd");
-  if (snp) snp.classList.toggle("hidden", v !== "snapshot");
   const tf = document.getElementById("tfPresets"), rc = document.getElementById("rangeChip");   // timeframe applies only to the dashboard charts
   if (tf) tf.classList.toggle("hidden", v !== "dash");
   if (rc) rc.classList.toggle("hidden", v !== "dash");
@@ -1063,7 +1046,6 @@ function showView(v) {
     x.classList.toggle("on", v === "dash" ? x.dataset.goto === "kpis" : x.dataset.view === v));
   if (v === "history") renderHistory();
   if (v === "stagebd") renderStageBd();
-  if (v === "snapshot") renderSnapshot();
   if (v !== "history") document.getElementById("histPreview").classList.add("hidden");
   render(loadStore());
 }
@@ -1072,7 +1054,7 @@ function renderStageBd() {
   const store = loadStore();
   const eng = engSel(store);
   const eview = eng ? eng.views["30"] : null;
-  if (!eview) { document.getElementById("sbSub").textContent = "Stage health needs a fresh import \u00b7 re-import your latest HubSpot export";
+  if (!eview) { document.getElementById("sbSub").title = "Stage health needs a fresh import \u00b7 re-import your latest HubSpot export";
     document.getElementById("sbTable").innerHTML = ""; return; }
   const rows = eview.tableRows;
   const totOpen = rows.reduce((s, r) => s + (r.wip || 0), 0) || 1;
@@ -1084,7 +1066,7 @@ function renderStageBd() {
   });
   const key = { stage: r => r.stage, verdict: r => -r.rank, load: r => r.share, excess: r => r.excess, open: r => r.wip, share: r => r.share, typical: r => r.normal ?? -1 }[sbSort.col];
   enr.sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * sbSort.dir; });
-  document.getElementById("sbSub").textContent = `Verdicts from each stage's own history${cohortLabel()} \u00b7 last 30 days before ${fmtDay(eng.snapDate)} \u00b7 click a stage to chart it`;
+  document.getElementById("sbSub").title = `Verdicts from each stage's own history${cohortLabel()} \u00b7 last 30 days before ${fmtDay(eng.snapDate)} \u00b7 click a stage to chart it`;
   const hdr = [["stage", "Stage"], ["verdict", "Verdict"], ["load", "Concentration"], ["excess", "Days overdue"], ["open", "Open"], ["share", "% of backlog"], ["typical", "Benchmark"]];
   const arrow = c => sbSort.col === c ? (sbSort.dir < 0 ? " \u25be" : " \u25b4") : "";
   const exConcern = { aging: 1, watch: 1, stalled: 1 };    // red only where the verdict itself flags a problem; else plain number (no red vs Steady/Building)
@@ -1119,82 +1101,6 @@ function renderStageBd() {
     el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
   });
 }
-/* ---------- Snapshot (leadership summary; add-on view, same engine data) ---------- */
-let snapPeriod = "30";
-const SNAP_INTAKE = { "keeping-pace": "keeping pace", behind: "falling behind", "catching-up": "catching up" };
-const SNAP_SPEED = { faster: "faster than the prior window", slower: "slower than the prior window", "about-the-same": "about the same as the prior window", "n/a": "no prior import to compare" };
-function snapView(store) {                                // current cohort + period's engine view (null if unavailable)
-  const eng = engSel(store); if (!eng) return null;
-  const v = eng.views[snapPeriod] || eng.views["30"]; if (!v) return null;
-  return { eng, v, e: v.execBand };
-}
-function snapshotText(store) {
-  const s = snapView(store); if (!s) return "";
-  const { eng, v, e } = s;
-  const pLabel = (ENG_PERIODS.find(x => x[1] === snapPeriod) || ENG_PERIODS[1])[0];
-  const drags = e.topDrags.map(d => { const f = v.focusRows.find(x => x.stage === d.stage) || {}; return `${d.stage} (${d.excess} days overdue, ${f.owner === "customer" ? "customer" : "our team"})`; }).join(", ");
-  return [
-    `Implementation Health — snapshot through ${fmtDay(eng.snapDate)} (${pLabel}${cohort === "all" ? "" : " · " + cohort})${store.demo ? " — SAMPLE DATA" : ""}`,
-    `Backlog: ${e.open} open${e.openDelta != null ? ` (${e.openDelta > 0 ? "+" : ""}${e.openDelta} vs last import)` : ""}.`,
-    e.topDrags.length ? `${e.concentrationPct}% of the delay is concentrated in: ${drags}.` : `Nothing is overdue.`,
-    `Incoming ${SNAP_INTAKE[e.intakeState]} (${e.arrivals} in / ${e.departs} done over ${pLabel.toLowerCase()}).`,
-    e.medLead != null ? `${e.goLives} went live, median ${e.medLead} days from PO to live (${snapPeriod === "30" ? SNAP_SPEED[e.speedState] : "no matching prior window to compare"}).` : "",
-  ].filter(Boolean).join("\n");
-}
-function renderSnapshot() {
-  const el = document.getElementById("snapshot"); if (!el) return;
-  const store = loadStore();
-  const s = store.lastImport ? snapView(store) : null;
-  if (!s) {
-    el.innerHTML = `<section class="card" style="max-width:860px">
-      <div class="row-h"><div><h3>LEADERSHIP SNAPSHOT</h3><p class="ch-sub">A leadership-ready summary built from the same data as the dashboard</p></div></div>
-      <div style="color:var(--hint);padding:20px 0">${!store.lastImport ? "Import your HubSpot export first · the snapshot builds itself from the data" : "Stage health needs a fresh import · re-import your latest HubSpot export"}</div></section>`;
-    return;
-  }
-  const { eng, v, e } = s;
-  const pLabel = (ENG_PERIODS.find(x => x[1] === snapPeriod) || ENG_PERIODS[1])[0];
-  const q1 = e.topDrags.length
-    ? `<b>${e.concentrationPct}%</b> of the delay <span class="sa-sub">· in ${e.topDrags.length} stage${e.topDrags.length > 1 ? "s" : ""}</span>`
-    : `<b>None</b> <span class="sa-sub">· nothing overdue</span>`;
-  const q2 = `<b>${e.open.toLocaleString()}</b> open` + (e.openDelta == null ? "" : ` <span class="${e.openDelta > 0 ? "sa-up" : "sa-dn"}">${e.openDelta > 0 ? "▲ +" : "▼ "}${e.openDelta}</span> <span class="sa-sub">vs last import</span>`);
-  const q3 = `<b>${e.arrivals}</b> in / <b>${e.departs}</b> done <span class="sa-sub">· ${SNAP_INTAKE[e.intakeState]}</span>`;
-  const q4 = e.medLead == null ? `<b>—</b> <span class="sa-sub">no completed go-lives with a PO date in this window</span>`
-    : `median <b>${e.medLead}d</b> to live <span class="sa-sub">· ${e.goLives} went live · ${snapPeriod === "30" ? SNAP_SPEED[e.speedState] : "no matching prior window to compare"}</span>`;
-  const dragRows = e.topDrags.length ? e.topDrags.map((d, i) => {
-    const f = v.focusRows.find(x => x.stage === d.stage) || {};
-    return `<div class="pend-row"><span class="pn"><span class="sd-rank">${i + 1}</span>${d.stage}</span><span class="pm"><span class="pill ${f.owner === "customer" ? "warn" : "flat"}">${f.owner === "customer" ? "customer" : "our team"}</span></span><span class="pm">${d.excess.toLocaleString()} days overdue</span></div>`;
-  }).join("") : `<div style="color:var(--hint);padding:10px 0">No stage is carrying overdue work right now.</div>`;
-  el.innerHTML = `
-    <section class="card" id="snapCard">
-      <div class="row-h"><div><h3>LEADERSHIP SNAPSHOT${cohortLabel()}</h3>
-        <p class="ch-sub">Snapshot through ${fmtDay(eng.snapDate)} · activity over ${pLabel.toLowerCase()}${store.demo ? " · SAMPLE DATA" : ""}</p></div>
-        <span class="tf" id="snapPeriods" data-html2canvas-ignore>${ENG_PERIODS.map(([lbl, val]) => `<button data-p="${val}" class="${snapPeriod === val ? "on" : ""}">${lbl}</button>`).join("")}</span></div>
-      <div class="snap-stmts">
-        <div class="snap-stmt"><span class="sq">Where is the delay concentrated?</span><span class="sa">${q1}</span></div>
-        <div class="snap-stmt"><span class="sq">Is the backlog growing?</span><span class="sa">${q2}</span></div>
-        <div class="snap-stmt"><span class="sq">Are we keeping up with incoming work?</span><span class="sa">${q3}</span></div>
-        <div class="snap-stmt"><span class="sq">How fast are we delivering?</span><span class="sa">${q4}</span></div>
-      </div>
-      <div class="drill-h" style="margin-top:16px">WHERE THE DELAY IS CONCENTRATED</div>
-      ${dragRows}
-    </section>
-    <div style="display:flex;gap:8px;margin-top:12px">
-      <button class="btn" id="snapCopy">Copy summary</button>
-      <button class="btn" id="snapPng">Download PNG</button>
-    </div>`;
-  document.querySelectorAll("#snapPeriods button").forEach(b => b.addEventListener("click", () => { snapPeriod = b.dataset.p; renderSnapshot(); }));
-  const cp = document.getElementById("snapCopy");
-  if (cp) cp.addEventListener("click", () => navigator.clipboard.writeText(snapshotText(loadStore())).then(() => toast("Summary copied.")).catch(() => toast("Copy failed.", true)));
-  const dl = document.getElementById("snapPng");
-  if (dl) dl.addEventListener("click", () => {
-    const card = document.getElementById("snapCard"); if (!card || !window.html2canvas) { toast("PNG export unavailable.", true); return; }
-    const dark = document.documentElement.getAttribute("data-theme") === "dark";
-    html2canvas(card, { backgroundColor: dark ? "#0e1320" : "#eef1f5", scale: 2, useCORS: true }).then(cv => {
-      const a = document.createElement("a"); a.href = cv.toDataURL("image/png"); a.download = "implementation-health-snapshot.png"; a.click();
-    }).catch(() => toast("PNG export failed.", true));
-  });
-}
-
 function renderHistory() {
   const arr = loadImports();
   document.getElementById("histList").innerHTML = arr.length ? arr.map((e, i) => `
