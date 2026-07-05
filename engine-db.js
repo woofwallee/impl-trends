@@ -129,11 +129,11 @@ function noticeMsg(r, table, recordCount, prev) {
     msg = `record count swung ${(100 * (recordCount - prevN) / prevN).toFixed(0)}%`;
   } else if (r.type === "stage-collapse") {
     const pw = prev && prev.byStage && prev.byStage[r.stage] ? prev.byStage[r.stage].wip : "?";
-    msg = `WIP fell ${pw}->${t.wip}`;
+    msg = `Open items fell from ${pw} to ${t.wip}`;
   } else if (r.type === "implausible-age") {
     msg = `${t.implausible_count} record(s) with implausible age excluded from ranking`;
   } else {
-    msg = `${t.missing_age} WIP records missing an entry date`;
+    msg = `${t.missing_age} open items missing an entry date`;
   }
   return { type: r.type, stage: r.stage ?? null, msg };
 }

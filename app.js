@@ -2,10 +2,10 @@
 
 /* CS Dashboard — client-side UI over the Stage Health engine. All processing
    in-browser; nothing uploaded. History persists in localStorage; back it up with the Data menu.
-   Stage verdicts, overdue-days, focus ranking, and data-quality notices come from the DuckDB
+   Stage verdicts, days overdue, focus ranking, and data-quality notices come from the DuckDB
    engine (engine-db.js running engine.sql) — this file renders them and does no stage math. */
 import { GD_CONFIG } from "./config.js";
-import { initEngine, buildDashboardDb } from "./engine-db.js";
+import { initEngine, buildDashboardDb } from "./engine-db.js?v=38";
 const ENG_DAY = 86400000;
 
 const CONFIG = {
@@ -292,7 +292,7 @@ function fmtMonth(k) { if (!k) return "—"; const [y, m] = k.split("-").map(Num
 function statusFor(delta, level, lowerBetter) {           // KPI cards: direction words, not judgments
   if (delta == null) return { word: "No comparison", cls: "flat", why: "no prior period in the data" };
   const dead = Math.max(1, Math.round(0.02 * Math.max(level || 0, 1)));
-  if (Math.abs(delta) <= dead) return { word: "Steady", glyph: "", cls: "flat", why: `within ${dead} of the prior period (2% deadband, at least 1)` };
+  if (Math.abs(delta) <= dead) return { word: "Steady", glyph: "", cls: "flat", why: `within ${dead} of the prior period (within 2%, at least 1)` };
   const up = delta > 0, good = lowerBetter ? !up : up;
   return { word: up ? "Rising" : "Falling", glyph: up ? "\u25b2 " : "\u25bc ", cls: good ? "good" : "bad",
     why: `${up ? "+" : ""}${delta} vs the prior period · ${good ? "green = improving" : "red = worsening"}` };
@@ -613,12 +613,12 @@ const ENG_LABEL = { aging: "Aging", building: "Backlog building", watch: "Watch"
 const ENG_SHORT = { building: "Building" };               // narrow watchlist column; full word everywhere else
 const ENG_CLS = { aging: "bad worse", building: "warn", watch: "warn", stalled: "warn", clearing: "good", steady: "flat", "no-history": "flat" };
 function engVerdictTitle(r) {                             // hover = the plain-language rule + this stage's numbers
-  const base = r.normal != null ? `typical ~${r.normal}d (this stage's own history)` : "no baseline yet";
-  if (r.key === "aging") return `Work is stuck past this stage's typical time · ${r.excess} overdue customer-days · oldest ${r.oldest}d · ${base}`;
-  if (r.key === "building") return `Arriving faster than leaving · net ${r.net > 0 ? "+" + r.net : r.net} over the 30-day flow window`;
-  if (r.key === "watch") return `At least one implementation is far past typical · oldest ${r.oldest}d · ${base}`;
+  const base = r.normal != null ? `benchmark ~${r.normal}d (this stage's own history)` : "no baseline yet";
+  if (r.key === "aging") return `Work is stuck past this stage's benchmark · ${r.excess} days overdue · oldest ${r.oldest}d · ${base}`;
+  if (r.key === "building") return `Arriving faster than leaving · net ${r.net > 0 ? "+" + r.net : r.net} over the last 30 days`;
+  if (r.key === "watch") return `At least one implementation is far past benchmark · oldest ${r.oldest}d · ${base}`;
   if (r.key === "stalled") return `Has open work but nothing arrived or left in 30 days · oldest ${r.oldest}d`;
-  if (r.key === "clearing") return `Leaving faster than arriving · net ${r.net} over the 30-day flow window`;
+  if (r.key === "clearing") return `Leaving faster than arriving · net ${r.net} over the last 30 days`;
   if (r.key === "no-history") return `Fewer completed passes than the baseline needs — verdicts start once history builds`;
   return `Within its normal range · ${base}`;
 }
@@ -641,25 +641,19 @@ function renderPendPanel(store) {
     navigator.clipboard.writeText(lines).then(() => toast("List copied.")).catch(() => toast("Copy failed.", true));
   });
 }
-function renderFocus(eview) {                             // 'Where to look first' = the engine's ranked focus list
+function renderFocus(eview) {                             // act-first line only; the watchlist above IS the ranked focus list
   const box = document.getElementById("stageInsights"); if (!box) return;
   const rowsF = (eview && eview.focusRows) || [];
   if (!rowsF.length) {
-    box.innerHTML = `<div class="ins-card flat"><span class="ins-dot flat"></span><span>Nothing is overdue · no stage is holding work past its typical time</span></div>`;
+    box.innerHTML = `<div class="act-line"><span class="ins-dot flat"></span><span>Nothing is overdue · no stage is holding work past its benchmark</span></div>`;
     return;
   }
-  const dot = r => r.key === "aging" ? (r.owner === "team" ? "red" : "amber") : r.key === "clearing" ? "green" : "amber";
-  const rowTxt = r => `${r.excess.toLocaleString()} overdue-days · ${r.countPastNormal} past the usual ~${r.normal ?? "—"}d · oldest ${r.oldest}d · ${r.owner === "customer" ? "customer-blocked" : "our team"}`;
   const act = (eview.actFirst || []);
   const bld = (eview.buildingRows || []);
-  box.innerHTML = `<div class="ins-hdr"><span></span><span>Stage</span><span>What&#39;s happening</span></div>`
-    + rowsF.map(r => `<button type="button" class="ins-card" data-stage="${r.stage}"><span class="ins-dot ${dot(r)}"></span><b title="${r.stage}">${r.stage}</b><span class="ins-txt">${rowTxt(r)}</span><span class="ins-go">chart it &#8594;</span></button>`).join("")
-    + `<div class="ins-card flat"><span class="ins-dot flat"></span><span>${act.length
-        ? `Act first — our team owns: <b style="color:var(--ink)">${act.join(", ")}</b>`
-        : `Top drags are customer-blocked · nudge the customer`}${bld.length
-        ? ` · also filling (capacity, not stuck): ${bld.map(b => `${b.stage} +${b.net}`).join(", ")}` : ""}</span></div>`;
-  box.querySelectorAll("button.ins-card").forEach(b =>
-    b.addEventListener("click", () => { selectedStage = b.dataset.stage; render(loadStore()); }));
+  box.innerHTML = `<div class="act-line"><span class="ins-dot flat"></span><span>${act.length
+      ? `Act first — owned by our team: <b>${act.join(", ")}</b>`
+      : `Top bottlenecks are customer-blocked · follow up with the customer`}${bld.length
+      ? ` · also growing (more arriving than closing): ${bld.map(b => `${b.stage} +${b.net}`).join(", ")}` : ""}</span></div>`;
 }
 function renderDrill(eng, stage) {                        // named records waiting in the selected stage (engine-computed, oldest first)
   const box = document.getElementById("stageDrill"); if (!box) return;
@@ -776,24 +770,19 @@ function render(store) {
       label: "Go-Lives", cap: "Go-live trend", count: glWinTotal, icon: '<path d="M5 13l4 4L19 7"/>', st,
       foot: hasWin ? `<b>${glWinTotal.toLocaleString()} went live</b> · ${goliveDelta == null ? "no prior period to compare" : (goliveDelta >= 0 ? "+" + goliveDelta : goliveDelta) + " vs " + priorName}` : "no data in selected range" }; })(),
   ];
+  const capTip = "Trend compares the selected period with the one before it · within 2% (at least ±1) counts as Steady · red = worsening, green = improving · products overlap, an implementation can be both";
   document.getElementById("kpis").innerHTML = kpis.map((k, i) => k.st.word === "No comparison"
     ? `<div class="card kpi" data-share="kpi-${i}">
     <div class="kl">${k.label}<span class="ki"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px">${k.icon}</svg></span></div>
-    <div class="kv-cap">${k.cap}</div><div class="kv">${k.count.toLocaleString()}</div><div class="kfoot">${k.foot}</div></div>`
+    <div class="kv-cap" title="${capTip}">${k.cap}</div><div class="kv">${k.count.toLocaleString()}</div><div class="kfoot">${k.foot}</div></div>`
     : `<div class="card kpi" data-share="kpi-${i}">
     <div class="kl">${k.label}<span class="ki"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px">${k.icon}</svg></span></div>
-    <div class="kv-cap">${k.cap}</div><div class="kv kv-status ${k.st.cls}" title="${k.st.why}">${k.st.glyph}${k.st.word}</div><div class="kfoot">${k.foot}</div></div>`).join("")
-    + `<div class="kpi-note">Trend compares the selected period with the one before it · within 2% (at least ±1) counts as Steady · red = worsening, green = improving · products overlap, an implementation can be both</div>`;
+    <div class="kv-cap" title="${capTip}">${k.cap}</div><div class="kv kv-status ${k.st.cls}" title="${k.st.why}">${k.st.glyph}${k.st.word}</div><div class="kfoot">${k.foot}</div></div>`).join("");
 
   // backlog — daily line within window, under the cohort filter
   document.getElementById("backlogNow").textContent = bl(cur).toLocaleString() + (cohort === "all" ? "" : "");
   document.querySelector("#sec-backlog h3").textContent = "OPEN PIPELINE TREND" + cohortLabel();
   document.getElementById("backlogPill").innerHTML = backlogDelta != null ? pill(backlogDelta, true) + ` <span style="font-size:12px;color:var(--hint)">vs ${priorName} (ended ${fmtDay(prevRow.date)})</span>` : "";
-  const heroSt = statusFor(totalDelta, cur.total, true);   // ONE verdict owner: the card and this pill can never disagree
-  const wtRange = `(${fmtDay(viewRange.from)} to ${fmtDay(viewRange.to)})`;
-  document.getElementById("backlogTrend").innerHTML = !hasWin ? "" : heroSt.word === "No comparison"
-    ? `<span class="pill flat" style="font-size:13px;padding:3px 10px">${wtRange}</span>`
-    : `<span class="pill ${heroSt.cls}" style="font-size:13px;padding:3px 10px">${heroSt.glyph}${heroSt.word} ${wtRange}</span>`;
   areaChart("backlogChart", m3.map(r => ({ m: r.date, v: bl(r) })), 220, fmtDay, viewRange);   // full history; selected range = initial viewport
 
   // go-lives — bars bucketed to the window + prior-period comparison
@@ -812,12 +801,9 @@ function render(store) {
   barChart("goliveChart", glKeys.map(k => ({ m: k, v: glAll[k] })), glFmt, glBucket, viewRange);
   const pcAll = store.pendingClose || [];
   const pcN = pcAll.filter(p => cohort === "all" || (p.types || []).includes(cohort)).length;
-  document.getElementById("goliveCap").innerHTML = (glWinTotal
-    ? `${glWinTotal} implementation${glWinTotal === 1 ? "" : "s"} went live in the selected period` + (goliveDelta != null ? ` · ${goliveDelta >= 0 ? goliveDelta + " more" : Math.abs(goliveDelta) + " fewer"} than the ${winLen} days before.` : ".")
-    : "No go-lives in the selected period.")
-    + (pcN ? (() => { const pcF = pcAll.filter(p => cohort === "all" || (p.types || []).includes(cohort));
+  document.getElementById("goliveCap").innerHTML = pcN ? (() => { const pcF = pcAll.filter(p => cohort === "all" || (p.types || []).includes(cohort));
         const oldest = pcF.length ? pcF[0].days : 0, stale = pcF.filter(p => p.days > 30).length;
-        return ` <button type="button" class="linky" data-pend="1">${pcN} went live but not closed out (all time)${stale ? ` · ${stale} waiting 30+ days` : ""} · oldest ${oldest}d · view list</button>`; })() : "");
+        return `<button type="button" class="linky" data-pend="1">${pcN} went live but not closed out (all time)${stale ? ` · ${stale} waiting 30+ days` : ""} · oldest ${oldest}d · view list</button>`; })() : "";
   document.getElementById("breakdown").style.display = cohort === "all" ? "" : "none";
   const bdTot = cur.total || 1;
   document.getElementById("breakdown").innerHTML = [
@@ -857,9 +843,8 @@ function render(store) {
       let lastV = null; for (let i = Math.floor(c.scales.x.max); i >= Math.ceil(c.scales.x.min); i--) if (dsv[i] != null) { lastV = dsv[i]; break; }
       if (lastV != null && speedTo && lastV >= speedTo * 1.2) spRecent = ` · recent go-lives trending ~${lastV}d`; }
     const spMiss = Math.max(0, glWinTotal - speedN);
-    document.getElementById("speedCap").textContent = `Go-lives in the selected period took a median ${speedTo} days from Purchase Order to Go-Live` + (speedN ? ` across ${speedN} go-lives` : "") +
-      (speedDelta != null ? (speedDelta < 0 ? ` · ${Math.abs(speedDelta)} days faster than the ${priorName}` : speedDelta > 0 ? ` · ${speedDelta} days slower than the ${priorName}` : ` · unchanged from the ${priorName}`) : "") +
-      spRecent + (spMiss ? ` · ${spMiss} go-live${spMiss === 1 ? "" : "s"} missing a PO date aren't plotted` : "") + ".";
+    document.getElementById("speedCap").textContent = (speedN ? `Median wait across ${speedN} go-lives` : "Median wait, Purchase Order to Go-Live")
+      + spRecent + (spMiss ? ` · ${spMiss} go-live${spMiss === 1 ? "" : "s"} missing a PO date aren't plotted` : "") + ".";
   } else {
     destroy("speedChart");
     document.getElementById("speedNow").textContent = "—";
@@ -867,10 +852,10 @@ function render(store) {
     document.getElementById("speedCap").textContent = "No completed implementations in the selected period.";
   }
 
-  // stage feature — TradingView watchlist + DAILY price chart; verdicts and overdue-days come from the engine
+  // stage feature — TradingView watchlist + DAILY price chart; verdicts and days overdue come from the engine
   document.querySelector("#sec-stage h3").textContent = "TIME IN STAGE" + cohortLabel();
   const eng = engSel(store);
-  const eview = eng ? eng.views["30"] : null;             // dashboard stage slots read the 30-day flow window
+  const eview = eng ? eng.views["30"] : null;             // dashboard stage slots read the last 30 days
   const { sd, sdDays, sdEnd } = stageWindow(store);       // daily avg-days series drives the chart pane only
   function stageArr(s) { return (sd.series && sd.series[s]) || []; }
   const curAvg = s => { const a = stageArr(s); return sdEnd >= 0 && a[sdEnd] != null ? a[sdEnd] : null; };
@@ -883,7 +868,7 @@ function render(store) {
     `<div class="wl-row${r.stage === selectedStage ? " sel" : ""}" data-stage="${r.stage}" role="button" tabindex="0" aria-pressed="${r.stage === selectedStage}">
       <span class="wnm" title="${r.stage}">${r.stage}</span>
       <span class="wcnt" title="open implementations sitting in this stage">${r.wip || 0}</span>
-      <span class="wlast" title="overdue customer-days past this stage's typical ~${r.normal ?? "—"}d · oldest item ${r.oldest}d">${r.excess ? r.excess.toLocaleString() : "0"}</span>${engVerdictPill(r, true)}</div>`).join("")
+      <span class="wlast" title="days overdue past this stage's benchmark ~${r.normal ?? "—"}d · oldest item ${r.oldest}d">${r.excess ? r.excess.toLocaleString() : "0"}</span>${engVerdictPill(r, true)}</div>`).join("")
     : `<div style="padding:14px;color:var(--hint);font-size:12.5px">Stage health needs a fresh import · re-import your latest HubSpot export</div>`;
   document.querySelectorAll("#stageList .wl-row").forEach(el => {
     const pick = () => { selectedStage = el.dataset.stage; render(loadStore()); };
@@ -919,8 +904,8 @@ function render(store) {
   document.getElementById("stageSummary").innerHTML = !eb
     ? `<span>This needs the stage date columns · included in the standard export</span>`
     : (eb.totalExcess
-      ? `<span><b style="color:var(--bad)">${eb.totalExcess.toLocaleString()}</b> overdue-days</span><span><b>${eb.concentrationPct}%</b> sits in ${eb.topDrags.length} stage${eb.topDrags.length === 1 ? "" : "s"}</span>`
-      : `<span><b style="color:var(--good)">0</b> overdue-days · nothing past typical</span>`);
+      ? `<span><b style="color:var(--bad)">${eb.totalExcess.toLocaleString()}</b> days overdue</span><span><b>${eb.concentrationPct}%</b> concentrated in ${eb.topDrags.length} stage${eb.topDrags.length === 1 ? "" : "s"}</span>`
+      : `<span><b style="color:var(--good)">0</b> days overdue · nothing past benchmark</span>`);
 
   const dataThrough = bounds ? bounds[1] : null;
   const importedOn = store.lastImport.when ? store.lastImport.when.slice(0, 10) : null;
@@ -1071,6 +1056,9 @@ function showView(v) {
   howto.classList.toggle("hidden", v !== "howto");
   if (sbd) sbd.classList.toggle("hidden", v !== "stagebd");
   if (snp) snp.classList.toggle("hidden", v !== "snapshot");
+  const tf = document.getElementById("tfPresets"), rc = document.getElementById("rangeChip");   // timeframe applies only to the dashboard charts
+  if (tf) tf.classList.toggle("hidden", v !== "dash");
+  if (rc) rc.classList.toggle("hidden", v !== "dash");
   document.querySelectorAll(".nav a").forEach(x =>
     x.classList.toggle("on", v === "dash" ? x.dataset.goto === "kpis" : x.dataset.view === v));
   if (v === "history") renderHistory();
@@ -1079,7 +1067,7 @@ function showView(v) {
   if (v !== "history") document.getElementById("histPreview").classList.add("hidden");
   render(loadStore());
 }
-let sbSort = { col: "excess", dir: -1 };                  // default: biggest drag first (matches the watchlist)
+let sbSort = { col: "excess", dir: -1 };                  // default: biggest bottleneck first (matches the watchlist)
 function renderStageBd() {
   const store = loadStore();
   const eng = engSel(store);
@@ -1091,27 +1079,32 @@ function renderStageBd() {
   const rankOf = { aging: 0, building: 1, watch: 2, stalled: 3, clearing: 4, steady: 5, "no-history": 6 };
   const enr = rows.map(r => {
     const share = (r.wip || 0) / totOpen * 100;
-    const load = r.wip === 0 ? { w: "\u2014", cls: "flat" } : share >= 10 ? { w: "Heavy", cls: "warn" } : share >= 5 ? { w: "Moderate", cls: "flat" } : { w: "Light", cls: "flat" };
+    const load = r.wip === 0 ? { w: "\u2014", cls: "flat" } : share >= 10 ? { w: "High", cls: "warn" } : share >= 5 ? { w: "Medium", cls: "flat" } : { w: "Low", cls: "flat" };
     return { ...r, share, load, rank: rankOf[r.key] ?? 9 };
   });
   const key = { stage: r => r.stage, verdict: r => -r.rank, load: r => r.share, excess: r => r.excess, open: r => r.wip, share: r => r.share, typical: r => r.normal ?? -1 }[sbSort.col];
   enr.sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * sbSort.dir; });
-  document.getElementById("sbSub").textContent = `Every stage's health at a glance${cohortLabel()} \u00b7 verdicts come from each stage's own history \u00b7 flow measured over the 30 days before ${fmtDay(eng.snapDate)} \u00b7 click a column to sort \u00b7 click a stage to chart it`;
-  const hdr = [["stage", "Stage"], ["verdict", "Verdict"], ["load", "Load"], ["excess", "Overdue-days"], ["open", "Open"], ["share", "% of backlog"], ["typical", "Typical"]];
+  document.getElementById("sbSub").textContent = `Verdicts from each stage's own history${cohortLabel()} \u00b7 last 30 days before ${fmtDay(eng.snapDate)} \u00b7 click a stage to chart it`;
+  const hdr = [["stage", "Stage"], ["verdict", "Verdict"], ["load", "Concentration"], ["excess", "Days overdue"], ["open", "Open"], ["share", "% of backlog"], ["typical", "Benchmark"]];
   const arrow = c => sbSort.col === c ? (sbSort.dir < 0 ? " \u25be" : " \u25b4") : "";
-  const exCell = r => r.excess
-    ? `<span class="sb-r"><span class="pill bad worse" title="${r.excess} customer-days past this stage's typical ~${r.normal ?? "\u2014"}d \u00b7 oldest item ${r.oldest}d">${r.excess.toLocaleString()}d</span></span>`
-    : `<span class="sb-r">\u2014</span>`;
+  const exConcern = { aging: 1, watch: 1, stalled: 1 };    // red only where the verdict itself flags a problem; else plain number (no red vs Steady/Building)
+  const exCell = r => {
+    if (!r.excess) return `<span class="sb-r">\u2014</span>`;
+    const tip = `${r.excess} days past this stage's benchmark ~${r.normal ?? "\u2014"}d \u00b7 oldest item ${r.oldest}d`;
+    return exConcern[r.key]
+      ? `<span class="sb-r"><span class="pill bad worse" title="${tip}">${r.excess.toLocaleString()}d</span></span>`
+      : `<span class="sb-r" title="${tip}">${r.excess.toLocaleString()}d</span>`;
+  };
   document.getElementById("sbTable").innerHTML =
     `<div class="sb-grid">` + hdr.map(([c, l], i) => `<div class="sb-h${i > 2 ? " sb-r" : ""}${sbSort.col === c ? " on" : ""}" data-sb="${c}" role="button" tabindex="0" aria-sort="${sbSort.col === c ? (sbSort.dir < 0 ? "descending" : "ascending") : "none"}" title="click to sort">${l}${arrow(c)}</div>`).join("") + `</div>`
     + enr.map(r => `<div class="sb-grid sb-row" data-stage="${r.stage}" role="button" tabindex="0">
       <span class="sb-name" title="${r.stage}${r.owner === "customer" ? " \u00b7 waiting on the customer in this stage" : ""}">${r.stage}</span>
       ${engVerdictPill(r)}
-      <span class="pill ${r.load.cls === "warn" ? "bad" : "flat"}" ${r.load.w === "Heavy" ? 'style="background:rgba(240,162,78,.18);color:#b7791f"' : ""}>${r.load.w}</span>
+      <span class="pill ${r.load.cls === "warn" ? "bad" : "flat"}" ${r.load.w === "High" ? 'style="background:rgba(240,162,78,.18);color:#b7791f"' : ""}>${r.load.w}</span>
       ${exCell(r)}
       <span class="sb-r">${r.wip || 0}</span>
       <span class="sb-r">${r.wip ? Math.round(r.share) + "%" : "\u2014"}</span>
-      <span class="sb-r" title="${r.normal != null ? "usually ~" + r.normal + "d in this stage (its own history, " + r.n + " completed passes) \u00b7 p95 " + (r.p95 ?? "\u2014") + "d" : "not enough completed passes for a baseline"}">${r.normal != null ? "~" + r.normal + "d" : "\u2014"}</span>
+      <span class="sb-r" title="${r.normal != null ? "benchmark ~" + r.normal + "d in this stage (its own history, " + r.n + " completed passes) \u00b7 p95 " + (r.p95 ?? "\u2014") + "d" : "not enough completed passes for a baseline"}">${r.normal != null ? "~" + r.normal + "d" : "\u2014"}</span>
     </div>`).join("");
   document.querySelectorAll("[data-sb]").forEach(h => {
     const go = () => { const c = h.dataset.sb;
@@ -1139,12 +1132,12 @@ function snapshotText(store) {
   const s = snapView(store); if (!s) return "";
   const { eng, v, e } = s;
   const pLabel = (ENG_PERIODS.find(x => x[1] === snapPeriod) || ENG_PERIODS[1])[0];
-  const drags = e.topDrags.map(d => { const f = v.focusRows.find(x => x.stage === d.stage) || {}; return `${d.stage} (${d.excess} overdue-days, ${f.owner === "customer" ? "customer" : "our team"})`; }).join(", ");
+  const drags = e.topDrags.map(d => { const f = v.focusRows.find(x => x.stage === d.stage) || {}; return `${d.stage} (${d.excess} days overdue, ${f.owner === "customer" ? "customer" : "our team"})`; }).join(", ");
   return [
     `Implementation Health — snapshot through ${fmtDay(eng.snapDate)} (${pLabel}${cohort === "all" ? "" : " · " + cohort})${store.demo ? " — SAMPLE DATA" : ""}`,
     `Backlog: ${e.open} open${e.openDelta != null ? ` (${e.openDelta > 0 ? "+" : ""}${e.openDelta} vs last import)` : ""}.`,
-    e.topDrags.length ? `${e.concentrationPct}% of the overdue wait sits in: ${drags}.` : `Nothing is overdue.`,
-    `Intake ${SNAP_INTAKE[e.intakeState]} (${e.arrivals} in / ${e.departs} done over ${pLabel.toLowerCase()}).`,
+    e.topDrags.length ? `${e.concentrationPct}% of the delay is concentrated in: ${drags}.` : `Nothing is overdue.`,
+    `Incoming ${SNAP_INTAKE[e.intakeState]} (${e.arrivals} in / ${e.departs} done over ${pLabel.toLowerCase()}).`,
     e.medLead != null ? `${e.goLives} went live, median ${e.medLead} days from PO to live (${snapPeriod === "30" ? SNAP_SPEED[e.speedState] : "no matching prior window to compare"}).` : "",
   ].filter(Boolean).join("\n");
 }
@@ -1169,12 +1162,12 @@ function renderSnapshot() {
     : `median <b>${e.medLead}d</b> to live <span class="sa-sub">· ${e.goLives} went live · ${snapPeriod === "30" ? SNAP_SPEED[e.speedState] : "no matching prior window to compare"}</span>`;
   const dragRows = e.topDrags.length ? e.topDrags.map((d, i) => {
     const f = v.focusRows.find(x => x.stage === d.stage) || {};
-    return `<div class="pend-row"><span class="pn"><span class="sd-rank">${i + 1}</span>${d.stage}</span><span class="pm"><span class="pill ${f.owner === "customer" ? "warn" : "flat"}">${f.owner === "customer" ? "customer" : "our team"}</span></span><span class="pm">${d.excess.toLocaleString()} overdue-days</span></div>`;
+    return `<div class="pend-row"><span class="pn"><span class="sd-rank">${i + 1}</span>${d.stage}</span><span class="pm"><span class="pill ${f.owner === "customer" ? "warn" : "flat"}">${f.owner === "customer" ? "customer" : "our team"}</span></span><span class="pm">${d.excess.toLocaleString()} days overdue</span></div>`;
   }).join("") : `<div style="color:var(--hint);padding:10px 0">No stage is carrying overdue work right now.</div>`;
   el.innerHTML = `
     <section class="card" id="snapCard">
       <div class="row-h"><div><h3>LEADERSHIP SNAPSHOT${cohortLabel()}</h3>
-        <p class="ch-sub">Snapshot through ${fmtDay(eng.snapDate)} · flow measured over ${pLabel.toLowerCase()} · the four questions leadership asks${store.demo ? " · SAMPLE DATA" : ""}</p></div>
+        <p class="ch-sub">Snapshot through ${fmtDay(eng.snapDate)} · activity over ${pLabel.toLowerCase()}${store.demo ? " · SAMPLE DATA" : ""}</p></div>
         <span class="tf" id="snapPeriods" data-html2canvas-ignore>${ENG_PERIODS.map(([lbl, val]) => `<button data-p="${val}" class="${snapPeriod === val ? "on" : ""}">${lbl}</button>`).join("")}</span></div>
       <div class="snap-stmts">
         <div class="snap-stmt"><span class="sq">Where is the delay concentrated?</span><span class="sa">${q1}</span></div>
@@ -1182,7 +1175,7 @@ function renderSnapshot() {
         <div class="snap-stmt"><span class="sq">Are we keeping up with incoming work?</span><span class="sa">${q3}</span></div>
         <div class="snap-stmt"><span class="sq">How fast are we delivering?</span><span class="sa">${q4}</span></div>
       </div>
-      <div class="drill-h" style="margin-top:16px">WHERE THE DELAY SITS</div>
+      <div class="drill-h" style="margin-top:16px">WHERE THE DELAY IS CONCENTRATED</div>
       ${dragRows}
     </section>
     <div style="display:flex;gap:8px;margin-top:12px">
