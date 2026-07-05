@@ -654,6 +654,7 @@ function renderDrill(eng, stage) {                        // named records waiti
 /* ---------- render ---------- */
 function render(store) {
   const dash = document.getElementById("dashboard"), empty = document.getElementById("empty");
+  const cbar = document.querySelector(".controlbar"); if (cbar) cbar.classList.toggle("hidden", !store.lastImport);   // no data: hide product/timeframe controls, keep the empty state clean
   if (currentView !== "dash") { dash.classList.add("hidden"); empty.classList.add("hidden");
     if (!store.lastImport) return;
     if (currentView === "stagebd") renderStageBd(); }                   // timeframe/product changes refresh the breakdown live
@@ -664,7 +665,7 @@ function render(store) {
   if (bounds && (!viewRange.from || !viewRange.to)) {
     const lm = lastMonthRange(bounds);
     viewRange.from = viewRange.from || lm.from; viewRange.to = viewRange.to || lm.to;
-    document.querySelectorAll("#tfPresets button").forEach(x => x.classList.toggle("on", x.dataset.tf === "lastm"));
+    const tfSel0 = document.getElementById("tfSelect"); if (tfSel0) tfSel0.value = "lastm";
   }
   syncRangeInputs();
   const [pFrom, pTo] = priorWindow();                     // equal-length window immediately before the selection
@@ -741,28 +742,30 @@ function render(store) {
     };
   };
   const drift = cumNote(m3);
-  const kpis = [
-    (() => { const st = statusFor(totalDelta, cur.total, true); return {
-      label: "Open implementations", cap: "Open trend", count: cur.total, icon: '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/>', st,
-      foot: hasWin ? `<b>${cur.total.toLocaleString()} open</b> · ${totalDelta == null ? "no prior period to compare" : (totalDelta >= 0 ? "+" + totalDelta : totalDelta) + " vs " + priorName + drift(totalDelta, cur.total, cur.total)}` : "no data in selected range" }; })(),
-    (() => { const st = statusFor(cpDelta, cur["CAREpoint"] || 0, true); return {
-      label: "CAREpoint", cap: "Open trend", count: cur["CAREpoint"] || 0, icon: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/>', st,
-      foot: hasWin ? `<b>${(cur["CAREpoint"] || 0).toLocaleString()} open</b> · ${cpDelta == null ? "no prior period to compare" : (cpDelta >= 0 ? "+" + cpDelta : cpDelta) + " vs " + priorName}` : "no data in selected range" }; })(),
-    (() => { const st = statusFor(ebDelta, cur["e-Bridge"] || 0, true); return {
-      label: "e-Bridge", cap: "Open trend", count: cur["e-Bridge"] || 0, icon: '<path d="M4 7h16M4 12h16M4 17h10"/>', st,
-      foot: hasWin ? `<b>${(cur["e-Bridge"] || 0).toLocaleString()} open</b> · ${ebDelta == null ? "no prior period to compare" : (ebDelta >= 0 ? "+" + ebDelta : ebDelta) + " vs " + priorName}` : "no data in selected range" }; })(),
-    (() => { const st = statusFor(goliveDelta, glWinTotal, false); return {
-      label: "Go-Lives", cap: "Go-live trend", count: glWinTotal, icon: '<path d="M5 13l4 4L19 7"/>', st,
-      foot: hasWin ? `<b>${glWinTotal.toLocaleString()} went live</b> · ${goliveDelta == null ? "no prior period to compare" : (goliveDelta >= 0 ? "+" + goliveDelta : goliveDelta) + " vs " + priorName}` : "no data in selected range" }; })(),
+  // three answer tiles — the primary tier: how many are open, where they're stuck, are we delivering on time
+  const engK = engSel(store), ebK = engK && engK.views["30"] ? engK.views["30"].execBand : null;
+  const trend = (d, name) => d != null ? `<span class="tile-trend">${pill(d, true)}<span class="tt-cap">vs ${name}</span></span>` : "";
+  const tiles = [
+    `<div class="tile" data-share="kpi-0">
+      <div class="tile-eyebrow">Open implementations</div>
+      <div class="tile-val">${hasWin ? cur.total.toLocaleString() : "&mdash;"}<small>open</small>${hasWin ? trend(totalDelta, priorName) : ""}</div>
+      <div class="tile-sub">${hasWin ? `CAREpoint <b>${(cur["CAREpoint"] || 0).toLocaleString()}</b> &middot; e-Bridge <b>${(cur["e-Bridge"] || 0).toLocaleString()}</b>` : "no data in selected range"}</div>
+    </div>`,
+    `<div class="tile" data-share="kpi-1">
+      <div class="tile-eyebrow">Where it's stuck</div>
+      ${ebK && ebK.totalExcess
+        ? `<div class="tile-val"><span class="tv-bad">${ebK.totalExcess.toLocaleString()}</span><small>days overdue</small></div>
+      <div class="tile-sub"><b>${ebK.concentrationPct}%</b> in ${ebK.topDrags.length} stage${ebK.topDrags.length === 1 ? "" : "s"}${ebK.topDrags[0] ? ` &middot; top: <b>${ebK.topDrags[0].stage}</b>` : ""}</div>`
+        : `<div class="tile-val"><span class="tv-good">0</span><small>days overdue</small></div>
+      <div class="tile-sub">nothing past its benchmark</div>`}
+    </div>`,
+    `<div class="tile" data-share="kpi-2">
+      <div class="tile-eyebrow">Delivery</div>
+      <div class="tile-val">${speedTo != null ? speedTo.toLocaleString() : "&mdash;"}<small>${speedTo != null ? "days median" : "no completions"}</small>${trend(speedDelta, priorName)}</div>
+      <div class="tile-sub">PO &rarr; Go-Live &middot; <b>${glWinTotal.toLocaleString()}</b> went live</div>
+    </div>`,
   ];
-  const capTip = "Trend compares the selected period with the one before it · within 2% (at least ±1) counts as Steady · red = worsening, green = improving · products overlap, an implementation can be both";
-  document.getElementById("kpis").innerHTML = kpis.map((k, i) => k.st.word === "No comparison"
-    ? `<div class="card kpi" data-share="kpi-${i}">
-    <div class="kl">${k.label}<span class="ki"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px">${k.icon}</svg></span></div>
-    <div class="kv-cap" title="${capTip}">${k.cap}</div><div class="kv">${k.count.toLocaleString()}</div><div class="kfoot">${k.foot}</div></div>`
-    : `<div class="card kpi" data-share="kpi-${i}">
-    <div class="kl">${k.label}<span class="ki"><svg class="ic" viewBox="0 0 24 24" style="width:17px;height:17px">${k.icon}</svg></span></div>
-    <div class="kv-cap" title="${capTip}">${k.cap}</div><div class="kv kv-status ${k.st.cls}" title="${k.st.why}">${k.st.glyph}${k.st.word}</div><div class="kfoot">${k.foot}</div></div>`).join("");
+  document.getElementById("kpis").innerHTML = tiles.join("");
 
   // backlog — daily line within window, under the cohort filter
   document.getElementById("backlogNow").textContent = bl(cur).toLocaleString() + (cohort === "all" ? "" : "");
@@ -931,7 +934,8 @@ function setTF(tf) {
     }
   }
   try { localStorage.setItem(TF_KEY, tf); } catch (e) { }
-  document.querySelectorAll("#tfPresets button").forEach(x => x.classList.toggle("on", x.dataset.tf === tf));
+  const tfSel = document.getElementById("tfSelect");
+  if (tfSel) { tfSel.value = tf; const rcE = document.getElementById("rangeChip"); if (rcE) rcE.classList.add("hidden"); }
   render(store);
 }
 
@@ -943,10 +947,9 @@ function applyTheme(t) { document.documentElement.setAttribute("data-theme", t);
 
 /* ---------- share ---------- */
 const SHARE_CARDS = [
-  { id: "kpi-0", label: "Open implementations · trend" },
-  { id: "kpi-1", label: "CAREpoint · trend" },
-  { id: "kpi-2", label: "e-Bridge · trend" },
-  { id: "kpi-3", label: "Go-Lives · trend" },
+  { id: "kpi-0", label: "Open implementations" },
+  { id: "kpi-1", label: "Where it's stuck" },
+  { id: "kpi-2", label: "Delivery" },
   { id: "sec-backlog", label: "Open pipeline trend (backlog)" },
   { id: "sec-stage", label: "Time in stage" },
   { id: "sec-speed", label: "PO to go-live" },
@@ -1039,9 +1042,8 @@ function showView(v) {
   hist.classList.toggle("hidden", v !== "history");
   howto.classList.toggle("hidden", v !== "howto");
   if (sbd) sbd.classList.toggle("hidden", v !== "stagebd");
-  const tf = document.getElementById("tfPresets"), rc = document.getElementById("rangeChip");   // timeframe applies only to the dashboard charts
-  if (tf) tf.classList.toggle("hidden", v !== "dash");
-  if (rc) rc.classList.toggle("hidden", v !== "dash");
+  const tfTime = document.querySelector(".tf-time");   // timeframe applies only to the dashboard charts; product filter stays visible
+  if (tfTime) tfTime.classList.toggle("hidden", v !== "dash");
   document.querySelectorAll(".nav a").forEach(x =>
     x.classList.toggle("on", v === "dash" ? x.dataset.goto === "kpis" : x.dataset.view === v));
   if (v === "history") renderHistory();
@@ -1059,15 +1061,11 @@ function renderStageBd() {
   const rows = eview.tableRows;
   const totOpen = rows.reduce((s, r) => s + (r.wip || 0), 0) || 1;
   const rankOf = { aging: 0, building: 1, watch: 2, stalled: 3, clearing: 4, steady: 5, "no-history": 6 };
-  const enr = rows.map(r => {
-    const share = (r.wip || 0) / totOpen * 100;
-    const load = r.wip === 0 ? { w: "\u2014", cls: "flat" } : share >= 10 ? { w: "High", cls: "warn" } : share >= 5 ? { w: "Medium", cls: "flat" } : { w: "Low", cls: "flat" };
-    return { ...r, share, load, rank: rankOf[r.key] ?? 9 };
-  });
-  const key = { stage: r => r.stage, verdict: r => -r.rank, load: r => r.share, excess: r => r.excess, open: r => r.wip, share: r => r.share, typical: r => r.normal ?? -1 }[sbSort.col];
+  const enr = rows.map(r => ({ ...r, share: (r.wip || 0) / totOpen * 100, rank: rankOf[r.key] ?? 9 }));
+  const key = { stage: r => r.stage, verdict: r => -r.rank, excess: r => r.excess, open: r => r.wip, share: r => r.share, typical: r => r.normal ?? -1 }[sbSort.col];
   enr.sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * sbSort.dir; });
   document.getElementById("sbSub").title = `Verdicts from each stage's own history${cohortLabel()} \u00b7 last 30 days before ${fmtDay(eng.snapDate)} \u00b7 click a stage to chart it`;
-  const hdr = [["stage", "Stage"], ["verdict", "Verdict"], ["load", "Concentration"], ["excess", "Days overdue"], ["open", "Open"], ["share", "% of backlog"], ["typical", "Benchmark"]];
+  const hdr = [["stage", "Stage"], ["verdict", "Verdict"], ["excess", "Days overdue"], ["open", "Open"], ["share", "% of backlog"], ["typical", "Benchmark"]];
   const arrow = c => sbSort.col === c ? (sbSort.dir < 0 ? " \u25be" : " \u25b4") : "";
   const exConcern = { aging: 1, watch: 1, stalled: 1 };    // red only where the verdict itself flags a problem; else plain number (no red vs Steady/Building)
   const exCell = r => {
@@ -1078,11 +1076,10 @@ function renderStageBd() {
       : `<span class="sb-r" title="${tip}">${r.excess.toLocaleString()}d</span>`;
   };
   document.getElementById("sbTable").innerHTML =
-    `<div class="sb-grid">` + hdr.map(([c, l], i) => `<div class="sb-h${i > 2 ? " sb-r" : ""}${sbSort.col === c ? " on" : ""}" data-sb="${c}" role="button" tabindex="0" aria-sort="${sbSort.col === c ? (sbSort.dir < 0 ? "descending" : "ascending") : "none"}" title="click to sort">${l}${arrow(c)}</div>`).join("") + `</div>`
+    `<div class="sb-grid">` + hdr.map(([c, l], i) => `<div class="sb-h${i > 1 ? " sb-r" : ""}${sbSort.col === c ? " on" : ""}" data-sb="${c}" role="button" tabindex="0" aria-sort="${sbSort.col === c ? (sbSort.dir < 0 ? "descending" : "ascending") : "none"}" title="click to sort">${l}${arrow(c)}</div>`).join("") + `</div>`
     + enr.map(r => `<div class="sb-grid sb-row" data-stage="${r.stage}" role="button" tabindex="0">
       <span class="sb-name" title="${r.stage}${r.owner === "customer" ? " \u00b7 waiting on the customer in this stage" : ""}">${r.stage}</span>
       ${engVerdictPill(r)}
-      <span class="pill ${r.load.cls === "warn" ? "bad" : "flat"}" ${r.load.w === "High" ? 'style="background:rgba(240,162,78,.18);color:#b7791f"' : ""}>${r.load.w}</span>
       ${exCell(r)}
       <span class="sb-r">${r.wip || 0}</span>
       <span class="sb-r">${r.wip ? Math.round(r.share) + "%" : "\u2014"}</span>
@@ -1251,15 +1248,11 @@ function init() {
     } catch (err) { toast(err && err.name === "QuotaExceededError" ? "That backup is too large for this browser's storage." : "Not a valid history file.", true); } }; r.readAsText(f); hf.value = ""; });
 
   ["fromDate", "toDate"].forEach(id =>
-    document.getElementById(id).addEventListener("change", () => { const r = rangeFromInputs(); if (!r) return; vpUserSet = true; viewRange.from = r.from; viewRange.to = r.to; try { localStorage.setItem(TF_KEY, "custom:" + r.from + ":" + r.to); } catch (e) { } document.querySelectorAll("#tfPresets button").forEach(x => x.classList.remove("on")); render(loadStore()); }));
-  document.querySelectorAll("#tfPresets button").forEach(b => b.addEventListener("click", () => setTF(b.dataset.tf)));
-  document.getElementById("todayBtn").addEventListener("click", () => {
-    const n = new Date(); let today = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
-    const bT = dataDayBounds(loadStore()); if (bT && today > bT[1]) today = bT[1];   // never label a range past the data
-    vpUserSet = true;
-    viewRange.to = today; if (viewRange.from && viewRange.from > today) viewRange.from = today;
-    document.querySelectorAll("#tfPresets button").forEach(x => x.classList.remove("on"));
-    render(loadStore());
+    document.getElementById(id).addEventListener("change", () => { const r = rangeFromInputs(); if (!r) return; vpUserSet = true; viewRange.from = r.from; viewRange.to = r.to; try { localStorage.setItem(TF_KEY, "custom:" + r.from + ":" + r.to); } catch (e) { } const s = document.getElementById("tfSelect"); if (s) s.value = "custom"; render(loadStore()); }));
+  document.getElementById("tfSelect").addEventListener("change", e => {
+    const rc = document.getElementById("rangeChip");
+    if (e.target.value === "custom") { rc.classList.remove("hidden"); syncRangeInputs(); }   // reveal date inputs only for Custom
+    else { rc.classList.add("hidden"); setTF(e.target.value); }
   });
   document.querySelectorAll("#cohortSel button").forEach(b => b.addEventListener("click", () => {
     cohort = b.dataset.c;
@@ -1328,6 +1321,8 @@ function init() {
     if (saved && b && saved.startsWith("custom:")) {
       const [, f, t] = saved.split(":");
       if (f >= b[0] && t <= b[1]) { vpUserSet = true; viewRange.from = f; viewRange.to = t; }
+      const s = document.getElementById("tfSelect"); if (s) s.value = "custom";
+      const rc = document.getElementById("rangeChip"); if (rc) rc.classList.remove("hidden");
       render(s0);
     } else if (saved && b) setTF(saved);
     else render(s0);
