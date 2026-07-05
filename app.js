@@ -898,7 +898,9 @@ function render(store) {
   const importedOn = store.lastImport.when ? store.lastImport.when.slice(0, 10) : null;
   document.getElementById("subtitle").textContent = `${store.lastImport.records.toLocaleString()} implementations · Showing ${fmtDay(viewRange.from)} – ${fmtDay(viewRange.to)}`
     + (dataThrough ? ` · Data through ${fmtDay(dataThrough)}` : "");
-  const sp = document.getElementById("samplePill"); if (sp) sp.classList.toggle("hidden", !store.demo);
+  const sp = document.getElementById("samplePill");
+  if (sp) { sp.classList.toggle("hidden", !store.demo); sp.textContent = "Sample data" + (store.demo && store.demoScenario ? " · " + store.demoScenario : ""); }
+  const scM = document.getElementById("scenarioMenu"); if (scM) scM.classList.toggle("hidden", !store.demo);   // live scenario switch, only while showing sample data
   const li = document.getElementById("lastImport"); if (li) li.innerHTML = importedOn ? `Last import <b>${fmtDay(importedOn)}</b>` : "";
   renderPendPanel(store);
   const sW = document.getElementById("stageWarn");
@@ -1301,8 +1303,11 @@ function init() {
   document.getElementById("hpClose").addEventListener("click", () => document.getElementById("histPreview").classList.add("hidden"));
   document.getElementById("hpExport").addEventListener("click", () => { const i = +document.getElementById("histPreview").dataset.idx; exportImport(i); });
 
-  const demoBtn = document.getElementById("demoBtn");
-  if (demoBtn) demoBtn.addEventListener("click", () => { localStorage.removeItem("impl_trends_demo_off"); loadDemo(); });
+  document.addEventListener("click", e => {                // scenario pickers (empty state + ⋮ menu)
+    const el = e.target && e.target.closest ? e.target.closest("[data-demo]") : null;
+    if (!el) return;
+    localStorage.removeItem("impl_trends_demo_off"); closeMenus(); loadDemo(el.dataset.demo);
+  });
 
   let s0 = loadStore();
   // Self-heal stores written by older app versions: replay the retained Import-history files in snapshot order.
@@ -1338,13 +1343,22 @@ function init() {
     else render(s0);
   }
 }
-function loadDemo() {                                     // bundled sample so the demo experience works out of the box
-  fetch("sample-data.csv").then(r => { if (!r.ok) throw 0; return r.text(); }).then(async text => {
+// situational demo datasets so Andrew can see the dashboard under different conditions
+const DEMO_SCENARIOS = {
+  healthy:    { file: "sample-healthy.csv",    label: "Healthy" },
+  typical:    { file: "sample-data.csv",       label: "Typical" },
+  struggling: { file: "sample-struggling.csv", label: "Struggling" },
+  crisis:     { file: "sample-crisis.csv",     label: "Crisis" },
+  flat:       { file: "sample-flat.csv",       label: "Quiet" },
+};
+function loadDemo(scenario = "typical") {                 // bundled samples so the demo works out of the box
+  const s = DEMO_SCENARIOS[scenario] || DEMO_SCENARIOS.typical;
+  fetch(s.file).then(r => { if (!r.ok) throw 0; return r.text(); }).then(async text => {
     const rows = parseCSV(text);
     const records = normalize(rows);
-    const store = await applyImport(loadStore(), records, "2026-07", toEngineRecords(rows), "sample-data_2026-07-01.csv");
-    store.demo = true; saveStore(store);
-    logImport({ fileName: "sample-data.csv (demo)", importedAt: new Date().toISOString(), snapMonth: "2026-07", records: records.length, older: false, csv: text });
+    const store = await applyImport(loadStore(), records, "2026-07", toEngineRecords(rows), `sample-${scenario}_2026-07-01.csv`);
+    store.demo = true; store.demoScenario = s.label; saveStore(store);
+    logImport({ fileName: `${s.label} sample (demo)`, importedAt: new Date().toISOString(), snapMonth: "2026-07", records: records.length, older: false, csv: text });
     showView("dash");
   }).catch(() => render(loadStore()));
 }

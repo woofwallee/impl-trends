@@ -269,6 +269,10 @@
   .empty .big{font-size:19px;color:var(--ink);font-weight:600;margin-bottom:6px}
   .empty-lead{font-size:13px;color:var(--muted);line-height:1.55;margin:0 auto 18px;max-width:370px}
   .empty-actions{display:flex;gap:8px;justify-content:center;margin-top:18px}
+  .empty-scenarios{margin-top:22px}
+  .es-label{font-size:10.5px;color:var(--hint);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+  .es-chips{display:flex;flex-wrap:wrap;gap:7px;justify-content:center}
+  .es-chips .btn{font-size:12px;padding:6px 12px}
   .empty-fields{margin-top:20px;text-align:left;font-size:12px}
   .empty-fields>summary{cursor:pointer;color:var(--ink);text-align:center;font-weight:500}
   .empty-fields .ef-body{margin-top:10px;color:var(--muted);line-height:1.6}
@@ -314,6 +318,15 @@
         <span class="last-import" id="lastImport"></span>
         <button class="btn primary" id="importBtn"><svg class="ic" viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Import</button>
         <details class="menu"><summary class="iconbtn" title="More options"><svg class="ic" viewBox="0 0 24 24" style="width:18px;height:18px"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg></summary><div class="menu-pop" style="width:250px">
+          <div class="scenario-menu hidden" id="scenarioMenu">
+            <div class="share-head">Sample scenarios</div>
+            <button data-demo="healthy">Healthy</button>
+            <button data-demo="typical">Typical</button>
+            <button data-demo="struggling">Struggling</button>
+            <button data-demo="crisis">Crisis</button>
+            <button data-demo="flat">Quiet</button>
+            <div class="sep"></div>
+          </div>
           <button id="themeBtn"><svg class="ic" id="themeIc" viewBox="0 0 24 24" style="width:17px;height:17px"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>Toggle theme</button>
           <div class="sep"></div>
           <div class="share-head">Export</div>
@@ -407,7 +420,17 @@
       <div class="empty-card">
         <svg class="empty-ic" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>
         <div class="big">Upload HubSpot File</div>
-        <div class="empty-actions"><button class="btn primary" id="importBtn2">Import CSV</button><button class="btn" id="demoBtn">Load sample data</button></div>
+        <div class="empty-actions"><button class="btn primary" id="importBtn2">Import CSV</button></div>
+        <div class="empty-scenarios">
+          <div class="es-label">or explore a sample dashboard</div>
+          <div class="es-chips">
+            <button class="btn" data-demo="healthy">Healthy</button>
+            <button class="btn" data-demo="typical">Typical</button>
+            <button class="btn" data-demo="struggling">Struggling</button>
+            <button class="btn" data-demo="crisis">Crisis</button>
+            <button class="btn" data-demo="flat">Quiet</button>
+          </div>
+        </div>
         <details class="empty-fields"><summary>Required fields &amp; assumptions</summary>
           <div class="ef-body">
           CRM &rarr; Implementations &rarr; <b>All Implementations</b> view, every filter cleared (open and completed both matter). Export &rarr; CSV; the standard 45-column view has everything. Name it <code>implementations_YYYY-MM-DD.csv</code>.<br><br>
@@ -469,6 +492,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script type="module" src="app.js?v=43"></script>
+<script type="module" src="app.js?v=44"></script>
 </body>
 </html>
