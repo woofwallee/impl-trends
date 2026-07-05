@@ -335,7 +335,7 @@
           <b>Why Go-Lives bars may not match the headline</b><br><span style="color:var(--muted)">Bars show full weeks or months. If your period starts mid-month, the first bar still shows the whole month, so the bars can add past the headline. The headline is always the exact count for your dates. Trust the headline for totals, the bars for shape.</span><br><br>
           <b id="ht-9">Why PO to Go-Live has gaps</b><br><span style="color:var(--muted)">That chart only plots days when something went live. Quiet days aren't drawn, so points sit closer together than the calendar would suggest when you zoom in to daily detail.</span><br><br>
           <b id="ht-10">Implementations that can't be counted</b><br><span style="color:var(--muted)">An implementation without a create date can't be placed on the timeline, so it's left out of the open counts. The speed average skips implementations with no Purchase Order date, or where the dates run backwards. Real HubSpot exports set these automatically, so this mostly matters for hand-edited files.</span><br><br>
-          <b id="ht-11">Your data</b><br><span style="color:var(--muted)">Everything runs in your browser. Nothing uploads anywhere. Back up saves your history to a file, Restore loads it back, and Reset wipes this browser clean. Back up before you reset.</span>
+          <b id="ht-11">Your data</b><br><span style="color:var(--muted)">Everything runs in your browser — the math runs on DuckDB, a trusted database engine embedded in this page, executing the readable rules in engine.sql. Nothing uploads anywhere. Back up saves your history to a file, Restore loads it back, and Reset wipes this browser clean. Back up before you reset.</span>
         </div>
         
       </section>
@@ -414,6 +414,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script type="module" src="app.js?v=34"></script>
+<script type="module" src="app.js?v=35"></script>
 </body>
 </html>

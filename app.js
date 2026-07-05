@@ -2,10 +2,11 @@
 
 /* Implementation Trends — client-side UI over the Stage Health engine. All processing
    in-browser; nothing uploaded. History persists in localStorage; back it up with the Data menu.
-   Stage verdicts, overdue-days, focus ranking, and data-quality notices come from engine.js
-   (verbatim copy of the audited engine-core) — this file renders them and does no stage math. */
+   Stage verdicts, overdue-days, focus ranking, and data-quality notices come from the DuckDB
+   engine (engine-db.js running engine.sql) — this file renders them and does no stage math. */
 import { GD_CONFIG } from "./config.js";
-import { buildDashboard, DAY as ENG_DAY } from "./engine.js";
+import { initEngine, buildDashboardDb } from "./engine-db.js";
+const ENG_DAY = 86400000;
 
 const CONFIG = {
   columns: {
@@ -139,7 +140,7 @@ function engPeriodStart(now, p) {
 /* Runs the audited engine per cohort x reporting period at IMPORT time; render reads the stored
    view models and does no stage math. prev (trend memory) applies to the all-products view only,
    mirroring the validated V1 semantics. */
-function computeEngineViews(engRecords, fileName, prevSnap) {
+async function computeEngineViews(engRecords, fileName, prevSnap) {
   const now = engSnapshotDate(engRecords, fileName);
   const views = {}, items = {};
   let prevSaved = null;
@@ -148,11 +149,11 @@ function computeEngineViews(engRecords, fileName, prevSnap) {
     const prev = cohort2 === "all" ? (prevSnap || null) : null;
     views[cohort2] = {};
     for (const [, key] of ENG_PERIODS) {
-      const db = buildDashboard(recs, GD_CONFIG, now, engPeriodStart(now, key), prev);
+      const db = await buildDashboardDb(recs, GD_CONFIG, now, engPeriodStart(now, key), prev);
       db.view.execBand.snapshotDate = dstr(now);
       views[cohort2][key] = db.view;
       if (key === "30") {
-        items[cohort2] = Object.fromEntries(db.evals.map(e => [e.stage, e.items || []]));
+        items[cohort2] = db.items;
         if (cohort2 === "all") prevSaved = db.snapshot;
       }
     }
@@ -239,14 +240,14 @@ function buildStageDaily(records) {                    // daily avg-days-in-stag
 function blankStore() { return { m1: {}, m2: {}, m3: [], m4: {}, stageDaily: null, lastImport: null, asOfMonth: null }; }
 function loadStore() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || blankStore(); } catch { return blankStore(); } }
 function saveStore(s) { localStorage.setItem(STORE_KEY, JSON.stringify(s)); }
-function applyImport(store, records, snap, engRecords, fileName) {
+async function applyImport(store, records, snap, engRecords, fileName) {
   store.m1[snap] = m1StageAge(records);                 // stage snapshot always recorded for its month
   const older = store.asOfMonth && snap < store.asOfMonth;
   if (!older) {                                          // newest file wins for the backfilled metrics
     const byType = t => records.filter(r => r.types.includes(t));
     if (engRecords) {                                    // Stage Health engine: computed once per import, stored as view models
       const prevSnap = (store.eng && store.eng.prevSaved) || null;
-      store.eng = computeEngineViews(engRecords, fileName, prevSnap);
+      store.eng = await computeEngineViews(engRecords, fileName, prevSnap);
       // day-level PO->live durations (engine definition: PO date to live date) for the median headline/chart
       const leadList = recs2 => recs2.filter(r => r.poDate && r.liveDate)
         .map(r => ({ d: dstr(r.liveDate), v: Math.round((r.liveDate - r.poDate) / MS_PER_DAY) }));
@@ -595,7 +596,7 @@ function stageWindow(store) {                             // window indices for 
   let sdStart = 0; if (viewRange.from) { sdStart = sdDays.findIndex(d => d >= viewRange.from); if (sdStart < 0) sdStart = sdDays.length; }
   return { sd, sdDays, sdStart, sdEnd };
 }
-/* ---------- Stage Health presentation maps (wording/colors live HERE, math lives in engine.js) ---------- */
+/* ---------- Stage Health presentation maps (wording/colors live HERE, math lives in engine.sql via engine-db.js) ---------- */
 const ENG_LABEL = { aging: "Aging", building: "Backlog building", watch: "Watch", stalled: "Stalled", clearing: "Clearing", steady: "Steady", "no-history": "No history" };
 const ENG_SHORT = { building: "Building" };               // narrow watchlist column; full word everywhere else
 const ENG_CLS = { aging: "bad worse", building: "warn", watch: "warn", stalled: "warn", clearing: "good", steady: "flat", "no-history": "flat" };
@@ -1235,7 +1236,7 @@ function closeMenus() { document.querySelectorAll("details.menu[open]").forEach(
 function noteShow(msg, kind) { const n = document.getElementById("importNote"); if (!n) return;
   n.className = "inote" + (kind === "err" ? " err" : ""); document.getElementById("importNoteMsg").innerHTML = msg; }
 function noteHide() { const n = document.getElementById("importNote"); if (n) n.className = "inote hidden"; }
-function handleFile(file) { const r = new FileReader(); r.onload = e => {
+function handleFile(file) { const r = new FileReader(); r.onload = async e => {
   try { const rows = parseCSV(e.target.result); const records = normalize(rows); if (!records.length) throw new Error("No records found.");
     const prev = loadStore().lastImport;
     if (prev && prev.records && Math.abs(records.length - prev.records) / prev.records > 0.2) {
@@ -1243,7 +1244,7 @@ function handleFile(file) { const r = new FileReader(); r.onload = e => {
     }
     const nameM = (file.name || "").match(CONFIG.filenameDateRegex);
     const snap = nameM ? `${nameM[1]}-${nameM[2]}` : monthKey(new Date());
-    const store = applyImport(loadStore(), records, snap, toEngineRecords(rows), file.name);
+    const store = await applyImport(loadStore(), records, snap, toEngineRecords(rows), file.name);
     if (/^sample-data\.csv$/i.test((file.name || "").trim())) store.demo = true;   // the bundled sample stays labeled sample
     saveStore(store);
     logImport({ fileName: file.name, importedAt: new Date().toISOString(), snapMonth: snap, records: records.length, older: !!store.lastImport.older, csv: e.target.result });
@@ -1260,15 +1261,17 @@ function handleFile(file) { const r = new FileReader(); r.onload = e => {
     if (prev && (!lb || lb < (prev.when || ""))) nags.push(`Last backup: ${lb ? fmtDay(lb.slice(0, 10)) : "never"} · this browser holds the only copy of your history <button class="btn" id="noteBackup" style="margin-left:8px">Back up now</button>`);
     if (nags.length) noteShow(nags.join("<br>"));
   } catch (err) {
+    const engineDown = /duckdb|wasm|worker|engine\.sql/i.test(String(err && err.message || err));
     const missing = /Missing column/.test(err.message || "");
-    noteShow((missing
+    noteShow((engineDown ? "The analytics engine failed to load, so nothing was imported. Reload the page and try again · your existing data is untouched. " : (missing
       ? "That file is missing the Implementation columns, so it may be the wrong HubSpot export. "
-      : "The import failed: " + (err.message || err) + ". ")
+      : "The import failed: " + (err.message || err) + ". "))
       + "Your existing data is untouched · How to Use has the export steps", "err");
   } };
   r.readAsText(file); }
 
 function init() {
+  initEngine().catch(() => {});
   const zp = window.ChartZoom || window["chartjs-plugin-zoom"] || window.chartjsPluginZoom;
   if (zp && window.Chart) { try { Chart.register(zp); } catch (e) { } }   // no-op if auto-registered
   applyTheme(localStorage.getItem(THEME_KEY) || "light");
@@ -1394,14 +1397,16 @@ function init() {
   if (s0.lastImport && (!s0.pendingDaily || !s0.m2d || !s0.eng || !s0.m2list)) {
     const imps = loadImports().filter(e => e.csv);
     const matches = imps.some(e => e.snapMonth === s0.lastImport.month && e.records === s0.lastImport.records);
-    if (imps.length && matches) { try {
+    if (imps.length && matches) { (async () => { try {
       const wasDemo = !!s0.demo;
       let rebuilt = blankStore();
-      [...imps].sort((a, b) => (a.snapMonth || "").localeCompare(b.snapMonth || ""))
-        .forEach(e => { const rows = parseCSV(e.csv); rebuilt = applyImport(rebuilt, normalize(rows), e.snapMonth, toEngineRecords(rows), e.fileName); });
+      for (const e of [...imps].sort((a, b) => (a.snapMonth || "").localeCompare(b.snapMonth || ""))) {
+        const rows = parseCSV(e.csv);
+        rebuilt = await applyImport(rebuilt, normalize(rows), e.snapMonth, toEngineRecords(rows), e.fileName);
+      }
       rebuilt.demo = wasDemo;
-      s0 = rebuilt; saveStore(s0);
-    } catch (e) { } }
+      saveStore(rebuilt); render(rebuilt);                 // re-render once healed
+    } catch (e) { } })(); }
   }
   if (!s0.lastImport) render(s0);                         // no data: show the guided empty state (Load sample is a button there)
   else {
@@ -1415,10 +1420,10 @@ function init() {
   }
 }
 function loadDemo() {                                     // bundled sample so the demo experience works out of the box
-  fetch("sample-data.csv").then(r => { if (!r.ok) throw 0; return r.text(); }).then(text => {
+  fetch("sample-data.csv").then(r => { if (!r.ok) throw 0; return r.text(); }).then(async text => {
     const rows = parseCSV(text);
     const records = normalize(rows);
-    const store = applyImport(loadStore(), records, "2026-07", toEngineRecords(rows), "sample-data_2026-07-01.csv");
+    const store = await applyImport(loadStore(), records, "2026-07", toEngineRecords(rows), "sample-data_2026-07-01.csv");
     store.demo = true; saveStore(store);
     logImport({ fileName: "sample-data.csv (demo)", importedAt: new Date().toISOString(), snapMonth: "2026-07", records: records.length, older: false, csv: text });
     showView("dash");
