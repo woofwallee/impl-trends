@@ -20,8 +20,9 @@ The Import screen lists the exact required fields and the data assumptions
 (durations in HubSpot milliseconds; live **date** = customer live; **stage** move
 to Live/Complete = exited the pipeline).
 
-The app ships with bundled sample data (`sample-data.csv`) that auto-loads on
-first launch for demos — Reset clears it, then import a real export.
+The app opens to an import screen with a row of selectable sample dashboards
+(Healthy, Typical, Struggling, Crisis, Quiet). Nothing auto-loads. Pick a sample
+to explore the dashboard, or import a real export. Reset returns to this screen.
 
 Any date range works — the pickers are day-level (weeks, quarters, custom), and
 every panel recomputes with a comparison against the equal-length prior period.

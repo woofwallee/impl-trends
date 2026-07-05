@@ -5,7 +5,7 @@
    Stage verdicts, days overdue, focus ranking, and data-quality notices come from the DuckDB
    engine (engine-db.js running engine.sql) — this file renders them and does no stage math. */
 import { GD_CONFIG } from "./config.js";
-import { initEngine, buildDashboardDb } from "./engine-db.js?v=39";
+import { initEngine, buildDashboardDb } from "./engine-db.js?v=45";
 const ENG_DAY = 86400000;
 
 const CONFIG = {
