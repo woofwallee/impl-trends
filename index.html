@@ -33,6 +33,17 @@
   .brand .mk{width:30px;height:30px;border-radius:9px;background:var(--blue);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
   .brand b{font-size:15px;font-weight:600;display:block;line-height:1.1}
   .brand span{font-size:11px;color:var(--hint)}
+  .side-toggle{margin-left:auto;width:26px;height:26px;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;line-height:1;flex:none}
+  .side-toggle:hover{color:var(--ink);background:var(--tile)}
+  .side.collapsed{width:66px;padding:20px 10px}
+  .side.collapsed .brand{flex-direction:column;gap:10px;padding:6px 0 16px}
+  .side.collapsed .brand-txt{display:none}
+  .side.collapsed .side-toggle{margin-left:0;transform:rotate(180deg)}
+  .side.collapsed .nav a{justify-content:center;gap:0;padding:10px 0;font-size:0}
+  .side.collapsed .nav a.sub{padding-left:0}
+  .side.collapsed .nav a.sub .ic{width:18px;height:18px;opacity:.85}
+  .side.collapsed .nav-cap{font-size:0;padding:10px 0 4px}
+  .side.collapsed .privacy{display:none}
   .nav a{display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:10px;color:var(--muted);text-decoration:none;font-weight:500;margin-bottom:2px;cursor:pointer}
   .nav a:hover{background:var(--tile);color:var(--ink)}
   .nav a:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
@@ -45,9 +56,10 @@
   .privacy b{color:var(--ink);display:block;margin-bottom:3px}
 
   .main{flex:1;min-width:0;padding:22px 26px 60px}
-  .top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:18px}
-  .top h1{font-size:22px;font-weight:600;margin:0}
-  .top .sub{font-size:12.5px;color:var(--hint);margin-top:2px}
+  .top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:6px;padding-top:4px}
+  .top h1{font-size:23px;font-weight:600;line-height:1.2;margin:0}
+  .top h1 .sample-pill{align-self:center}
+  .top .sub{font-size:12.5px;color:var(--hint);margin-top:7px}
   .tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .chip{display:inline-flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:7px 11px;font-size:13px;color:var(--muted)}
   .chip select,.chip input[type="date"]{border:none;background:transparent;color:var(--ink);font-size:13px;font-family:inherit;cursor:pointer;padding:2px}
@@ -87,7 +99,7 @@
   .htbody li{margin:3px 0}
   .grid-kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px}
   /* control strip: analysis controls (product, timeframe) on their own quiet row under the title */
-  .controlbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:2px 0 20px}
+  .controlbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:16px 0 24px}
   .cb-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .tf-select{border:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:13px;font-family:inherit;font-weight:500;padding:8px 11px;border-radius:10px;cursor:pointer}
   .tf-time{display:inline-flex;align-items:center;gap:8px}
@@ -111,7 +123,8 @@
   .pill.bad{color:var(--bad);background:var(--bad-bg)}
   .pill.flat{color:var(--muted);background:var(--tile)}
   .pill.warn{color:#b7791f;background:rgba(240,162,78,.18)}
-  .drill-h{font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--hint);font-weight:600;padding:2px 0 6px;border-bottom:1px solid var(--line)}
+  .drill-h{display:flex;justify-content:space-between;align-items:baseline;font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--hint);font-weight:600;padding:2px 0 6px;border-bottom:1px solid var(--line)}
+  .drill-h .drill-sort{padding-right:4px}
   .snap-stmts{margin-top:14px;display:flex;flex-direction:column}
   .snap-stmt{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:14px;align-items:baseline;padding:13px 2px;border-bottom:1px solid var(--line2)}
   .snap-stmt .sq{color:var(--muted);font-size:13.5px}
@@ -158,6 +171,7 @@
   .mktsum b{font-weight:600}
   .pend-row{display:grid;grid-template-columns:1fr auto auto auto;gap:14px;align-items:center;padding:10px 4px;border-top:1px solid var(--line2);font-size:13.5px}
   .pend-row:first-child{border-top:none}
+  .drill-list .pend-row{grid-template-columns:1fr auto auto}   /* 3 cols: name · product · age — age flush right so "oldest first" sits above it */
   .pend-row .pn{font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .pend-row .pm{color:var(--muted);white-space:nowrap;font-size:12.5px}
   .hist-row{display:grid;grid-template-columns:1fr auto auto auto;gap:14px;align-items:center;padding:13px 4px;border-top:1px solid var(--line2)}
@@ -237,6 +251,9 @@
   .wl-row:hover{background:var(--tile)}
   .wl-row.sel{background:var(--blue-soft)}
   .wl-row .wnm{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .wl-row .wl-num{display:inline-block;min-width:15px;margin-right:7px;color:var(--hint);font-weight:600;font-variant-numeric:tabular-nums}
+  .wl-verdict{justify-self:end;font-size:12px;font-weight:600;white-space:nowrap}
+  .wl-verdict.bad{color:var(--bad)} .wl-verdict.warn{color:#b7791f} .wl-verdict.good{color:var(--good)} .wl-verdict.flat{color:var(--muted)}
   .wl-row .wlast{font-weight:600;font-size:13px;text-align:right;min-width:40px}
   .chartpane{padding:16px 18px;min-width:0;position:sticky;top:14px;align-self:start}
   .chartpane .cp-h{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
@@ -271,7 +288,7 @@
 <body>
 <div class="app">
   <aside class="side">
-    <div class="brand"><div class="mk">CS</div><div><b>CS DASHBOARD</b><span>General Devices</span></div></div>
+    <div class="brand"><div class="mk">CS</div><div class="brand-txt"><b>CS DASHBOARD</b><span>General Devices</span></div><button class="side-toggle" id="sideToggle" title="Collapse menu" aria-label="Collapse menu" aria-expanded="true">&#8249;</button></div>
     <nav class="nav">
       <a class="on" tabindex="0" data-goto="kpis"><svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Dashboard</a>
       <a class="sub" tabindex="0" data-goto="sec-backlog"><svg class="ic" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>Open Pipeline</a>
@@ -451,6 +468,6 @@
   </main>
 </div>
 <div class="toast" id="toast"></div>
-<script type="module" src="app.js?v=40"></script>
+<script type="module" src="app.js?v=41"></script>
 </body>
 </html>

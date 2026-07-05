@@ -32,7 +32,7 @@ const CONFIG = {
   ],
 };
 const escHtml = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const MS_PER_DAY = 86400000, STORE_KEY = "impl_trends_history_v1", THEME_KEY = "impl_trends_theme", TF_KEY = "impl_trends_tf";
+const MS_PER_DAY = 86400000, STORE_KEY = "impl_trends_history_v1", THEME_KEY = "impl_trends_theme", TF_KEY = "impl_trends_tf", SIDE_KEY = "impl_trends_side";
 const CP = "#2f6ded", EB = "#ea8a2f", GOOD = "#15803d", BAD = "#dc2626", GRAY = "#9aa2af", BLUE = "#2f6ded";
 // TradingView Baseline palette, mapped to BUSINESS health (all baseline charts here are lower-is-better):
 // above the baseline = worsening (red), below = improving (green). Gray = no baseline / no change.
@@ -622,9 +622,12 @@ function engVerdictTitle(r) {                             // hover = the plain-l
   if (r.key === "no-history") return `Fewer completed passes than the baseline needs — verdicts start once history builds`;
   return `Within its normal range · ${base}`;
 }
-function engVerdictPill(r, short) {
+function engVerdictPill(r, short, bare) {
   const w = (short && ENG_SHORT[r.key]) || ENG_LABEL[r.key] || "—";
-  return `<span class="pill ${ENG_CLS[r.key] || "flat"}" title="${engVerdictTitle(r)}">${w}</span>`;
+  const cls = ENG_CLS[r.key] || "flat";
+  return bare
+    ? `<span class="wl-verdict ${cls}" title="${engVerdictTitle(r)}">${w}</span>`   // watchlist: colored text, no pill chrome
+    : `<span class="pill ${cls}" title="${engVerdictTitle(r)}">${w}</span>`;
 }
 let pendOpen = false;                                     // session-only; resets on refresh like the collapse state
 function renderPendPanel(store) {
@@ -646,7 +649,7 @@ function renderDrill(eng, stage) {                        // named records waiti
   const items = (eng && stage && eng.items[stage]) || [];
   if (!stage || !items.length) { box.innerHTML = ""; box.classList.add("hidden"); return; }
   box.classList.remove("hidden");
-  box.innerHTML = `<div class="drill-h">WAITING IN ${stage.toUpperCase()} · ${items.length} implementation${items.length === 1 ? "" : "s"} · oldest first</div>`
+  box.innerHTML = `<div class="drill-h"><span>WAITING IN ${stage.toUpperCase()} · ${items.length} implementation${items.length === 1 ? "" : "s"}</span><span class="drill-sort">oldest first</span></div>`
     + `<div class="drill-list">` + items.map(i =>
       `<div class="pend-row"><span class="pn" title="${escHtml(i.name)}">${escHtml(i.name)}</span><span class="pm">${escHtml(i.product || "")}</span><span class="pm">${i.age}d in stage</span></div>`).join("") + `</div>`;
 }
@@ -654,7 +657,7 @@ function renderDrill(eng, stage) {                        // named records waiti
 /* ---------- render ---------- */
 function render(store) {
   const dash = document.getElementById("dashboard"), empty = document.getElementById("empty");
-  const cbar = document.querySelector(".controlbar"); if (cbar) cbar.classList.toggle("hidden", !store.lastImport);   // no data: hide product/timeframe controls, keep the empty state clean
+  const cbar = document.querySelector(".controlbar"); if (cbar) cbar.classList.toggle("hidden", !store.lastImport || currentView === "history" || currentView === "howto");   // hide product/timeframe on empty state and on the How-to / Import History views
   if (currentView !== "dash") { dash.classList.add("hidden"); empty.classList.add("hidden");
     if (!store.lastImport) return;
     if (currentView === "stagebd") renderStageBd(); }                   // timeframe/product changes refresh the breakdown live
@@ -852,11 +855,11 @@ function render(store) {
   if (!selectedStage || !rows.some(r => r.stage === selectedStage)) selectedStage = rows[0] ? rows[0].stage : null;
 
   syncWlToggle();                                        // re-apply the collapse state on every render
-  document.getElementById("stageList").innerHTML = rows.length ? rows.map(r =>
+  document.getElementById("stageList").innerHTML = rows.length ? rows.map((r, i) =>
     `<div class="wl-row${r.stage === selectedStage ? " sel" : ""}" data-stage="${r.stage}" role="button" tabindex="0" aria-pressed="${r.stage === selectedStage}">
-      <span class="wnm" title="${r.stage}">${r.stage}</span>
+      <span class="wnm" title="${r.stage}"><span class="wl-num">${i + 1}</span>${r.stage}</span>
       <span class="wcnt" title="open implementations sitting in this stage">${r.wip || 0}</span>
-      <span class="wlast" title="days overdue past this stage's benchmark ~${r.normal ?? "—"}d · oldest item ${r.oldest}d">${r.excess ? r.excess.toLocaleString() : "0"}</span>${engVerdictPill(r, true)}</div>`).join("")
+      <span class="wlast" title="days overdue past this stage's benchmark ~${r.normal ?? "—"}d · oldest item ${r.oldest}d">${r.excess ? r.excess.toLocaleString() : "0"}</span>${engVerdictPill(r, true, true)}</div>`).join("")
     : `<div style="padding:14px;color:var(--hint);font-size:12.5px">Stage health needs a fresh import · re-import your latest HubSpot export</div>`;
   document.querySelectorAll("#stageList .wl-row").forEach(el => {
     const pick = () => { selectedStage = el.dataset.stage; render(loadStore()); };
@@ -937,6 +940,14 @@ function setTF(tf) {
   const tfSel = document.getElementById("tfSelect");
   if (tfSel) { tfSel.value = tf; const rcE = document.getElementById("rangeChip"); if (rcE) rcE.classList.add("hidden"); }
   render(store);
+}
+
+/* ---------- sidebar collapse ---------- */
+function applySideCollapsed() {
+  const c = localStorage.getItem(SIDE_KEY) === "1", side = document.querySelector(".side"), t = document.getElementById("sideToggle");
+  if (side) side.classList.toggle("collapsed", c);
+  if (t) { t.setAttribute("aria-expanded", String(!c)); t.title = c ? "Expand menu" : "Collapse menu"; }
+  window.dispatchEvent(new Event("resize"));   // let the canvas charts reflow to the new width
 }
 
 /* ---------- theme ---------- */
@@ -1183,6 +1194,7 @@ function init() {
   const zp = window.ChartZoom || window["chartjs-plugin-zoom"] || window.chartjsPluginZoom;
   if (zp && window.Chart) { try { Chart.register(zp); } catch (e) { } }   // no-op if auto-registered
   applyTheme(localStorage.getItem(THEME_KEY) || "light");
+  applySideCollapsed();
 
   // Dropdown menus close on outside click or Escape (and opening one closes the others).
   document.addEventListener("click", e => {
@@ -1216,6 +1228,7 @@ function init() {
     handleFile(f); });
 
   document.getElementById("themeBtn").addEventListener("click", () => { applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark"); render(loadStore()); });
+  document.getElementById("sideToggle").addEventListener("click", () => { const collapsed = !document.querySelector(".side").classList.contains("collapsed"); localStorage.setItem(SIDE_KEY, collapsed ? "1" : "0"); applySideCollapsed(); });
   document.getElementById("pngBtn").addEventListener("click", () => { closeMenus(); sharePNG(); });
   document.getElementById("pdfBtn").addEventListener("click", () => { closeMenus(); sharePDF(); });
 
