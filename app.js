@@ -1,6 +1,6 @@
 "use strict";
 
-/* Implementation Trends — client-side UI over the Stage Health engine. All processing
+/* CS Dashboard — client-side UI over the Stage Health engine. All processing
    in-browser; nothing uploaded. History persists in localStorage; back it up with the Data menu.
    Stage verdicts, overdue-days, focus ranking, and data-quality notices come from the DuckDB
    engine (engine-db.js running engine.sql) — this file renders them and does no stage math. */
@@ -993,7 +993,7 @@ function sharePNG() {
   const bg = dark ? "#0e1320" : "#eef1f5";
   if (sel.length === SHARE_CARDS.length) {
     html2canvas(document.getElementById("dashboard"), { backgroundColor: bg, scale: 2, useCORS: true }).then(cv => {
-      const a = document.createElement("a"); a.href = stampCanvas(cv, bg).toDataURL("image/png"); a.download = "implementation-trends.png"; a.click();
+      const a = document.createElement("a"); a.href = stampCanvas(cv, bg).toDataURL("image/png"); a.download = "cs-dashboard.png"; a.click();
     }).catch(() => toast("PNG export failed.", true));
     return;
   }
@@ -1008,7 +1008,7 @@ function sharePNG() {
     let y = PAD; for (const c of cvs) { ctx.drawImage(c, PAD, y); y += c.height + GAP; }
     const name = sel.length === 1
       ? SHARE_CARDS.find(c => c.id === sel[0]).label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
-      : "implementation-trends-selected";
+      : "cs-dashboard-selected";
     const a = document.createElement("a"); a.href = stampCanvas(out, bg).toDataURL("image/png"); a.download = name + ".png"; a.click();
   }).catch(() => toast("PNG export failed.", true));
 }
@@ -1335,7 +1335,7 @@ function init() {
   document.getElementById("backup").addEventListener("click", () => { closeMenus();
     const payload = { v: 2, savedAt: new Date().toISOString(), store: loadStore(), imports: loadImports() };
     const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "implementation-trends-history.json"; a.click();
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "cs-dashboard-history.json"; a.click();
     try { localStorage.setItem("impl_trends_backup_at", payload.savedAt); } catch (e) { }
     noteHide(); });
   const hf = document.getElementById("histFile");
