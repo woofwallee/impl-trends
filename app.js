@@ -1,7 +1,11 @@
 "use strict";
 
-/* Implementation Trends — client-side engine + UI. All processing in-browser; nothing uploaded.
-   History persists in localStorage; back it up with the Data menu. */
+/* Implementation Trends — client-side UI over the Stage Health engine. All processing
+   in-browser; nothing uploaded. History persists in localStorage; back it up with the Data menu.
+   Stage verdicts, overdue-days, focus ranking, and data-quality notices come from engine.js
+   (verbatim copy of the audited engine-core) — this file renders them and does no stage math. */
+import { GD_CONFIG } from "./config.js";
+import { buildDashboard, DAY as ENG_DAY } from "./engine.js";
 
 const CONFIG = {
   columns: {
@@ -97,6 +101,69 @@ function normalize(rows) { const C = CONFIG.columns;
   const byId = new Map(); mapped.forEach(r => byId.set(r.id, r));   // dedupe by Record ID (last wins)
   return [...byId.values()]; }
 
+/* ---------- Stage Health engine adapter (verbatim from the validated V1 adapter) ---------- */
+const STAGE_COLS = [...GD_CONFIG.stages, GD_CONFIG.terminal];
+const engDate = s => { if (!s || !String(s).trim()) return null; const d = new Date(String(s).trim()); return isNaN(d) ? null : d; };
+function toEngineRecords(rows) {                          // HubSpot CSV rows -> normalized engine records
+  return rows.map(r => {
+    const events = {};
+    for (const s of STAGE_COLS) {
+      const en = engDate(r[`Date entered "${s} (Implementation Pipeline)"`]);
+      const ex = engDate(r[`Date exited "${s} (Implementation Pipeline)"`]);
+      if (en || ex) events[s] = { enter: en, exit: ex };
+    }
+    const cs = r["Implementation pipeline stage"] || "";
+    if (cs && !events[cs]) events[cs] = { enter: engDate(r["Date entered current stage"]), exit: null };
+    const t = r["Implementation Type"] || "";
+    return {
+      id: r["Record ID"], name: r["Implementation Name"] || r["Record ID"],
+      product: t.includes(";") ? "Both" : t, currentStage: cs, events,
+      poDate: engDate(r["PO Date"]), liveDate: engDate(r["Implementation Live/Complete"]),
+    };
+  });
+}
+function engSnapshotDate(records, filename) {             // 'now' for the engine: filename date, else last event
+  const m = (filename || "").match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00Z`);
+  let max = 0;
+  for (const r of records) for (const s in r.events) { const e = r.events[s]; for (const k of ["enter", "exit"]) if (e[k] && e[k].getTime() > max) max = e[k].getTime(); }
+  return max ? new Date(max) : new Date();
+}
+const engProductMatch = (rec, filt) => filt === "all" || rec.product === filt || rec.product === "Both";
+const ENG_PERIODS = [["This month", "month"], ["Last 30 days", "30"], ["Last 90 days", "90"], ["Year to date", "ytd"]];
+function engPeriodStart(now, p) {
+  if (p === "month") return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  if (p === "ytd") return new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+  return new Date(now.getTime() - Number(p) * ENG_DAY);
+}
+/* Runs the audited engine per cohort x reporting period at IMPORT time; render reads the stored
+   view models and does no stage math. prev (trend memory) applies to the all-products view only,
+   mirroring the validated V1 semantics. */
+function computeEngineViews(engRecords, fileName, prevSnap) {
+  const now = engSnapshotDate(engRecords, fileName);
+  const views = {}, items = {};
+  let prevSaved = null;
+  for (const cohort2 of ["all", "CAREpoint", "e-Bridge"]) {
+    const recs = engRecords.filter(r => engProductMatch(r, cohort2));
+    const prev = cohort2 === "all" ? (prevSnap || null) : null;
+    views[cohort2] = {};
+    for (const [, key] of ENG_PERIODS) {
+      const db = buildDashboard(recs, GD_CONFIG, now, engPeriodStart(now, key), prev);
+      db.view.execBand.snapshotDate = dstr(now);
+      views[cohort2][key] = db.view;
+      if (key === "30") {
+        items[cohort2] = Object.fromEntries(db.evals.map(e => [e.stage, e.items || []]));
+        if (cohort2 === "all") prevSaved = db.snapshot;
+      }
+    }
+  }
+  return { snapDate: dstr(now), views, items, prevSaved };
+}
+function engSel(store) {                                  // current cohort's engine views (or null pre-engine stores)
+  const e = store.eng; if (!e || !e.views) return null;
+  return { snapDate: e.snapDate, views: e.views[cohort] || e.views.all, items: (e.items || {})[cohort] || {} };
+}
+
 /* ---------- metrics ---------- */
 function mean(a) { const v = a.filter(x => x != null); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; }
 function m1StageAge(records) { const b = {};
@@ -172,11 +239,21 @@ function buildStageDaily(records) {                    // daily avg-days-in-stag
 function blankStore() { return { m1: {}, m2: {}, m3: [], m4: {}, stageDaily: null, lastImport: null, asOfMonth: null }; }
 function loadStore() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || blankStore(); } catch { return blankStore(); } }
 function saveStore(s) { localStorage.setItem(STORE_KEY, JSON.stringify(s)); }
-function applyImport(store, records, snap) {
+function applyImport(store, records, snap, engRecords, fileName) {
   store.m1[snap] = m1StageAge(records);                 // stage snapshot always recorded for its month
   const older = store.asOfMonth && snap < store.asOfMonth;
   if (!older) {                                          // newest file wins for the backfilled metrics
     const byType = t => records.filter(r => r.types.includes(t));
+    if (engRecords) {                                    // Stage Health engine: computed once per import, stored as view models
+      const prevSnap = (store.eng && store.eng.prevSaved) || null;
+      store.eng = computeEngineViews(engRecords, fileName, prevSnap);
+      // day-level PO->live durations (engine definition: PO date to live date) for the median headline/chart
+      const leadList = recs2 => recs2.filter(r => r.poDate && r.liveDate)
+        .map(r => ({ d: dstr(r.liveDate), v: Math.round((r.liveDate - r.poDate) / MS_PER_DAY) }));
+      store.m2list = { all: leadList(engRecords),
+        "CAREpoint": leadList(engRecords.filter(r => engProductMatch(r, "CAREpoint"))),
+        "e-Bridge": leadList(engRecords.filter(r => engProductMatch(r, "e-Bridge"))) };
+    }
     store.m3 = m3Daily(records);
     store.m4 = { all: m4GoLives(records), "CAREpoint": m4GoLives(byType("CAREpoint")), "e-Bridge": m4GoLives(byType("e-Bridge")) };
     store.m2 = { all: m2History(records), "CAREpoint": m2History(byType("CAREpoint")), "e-Bridge": m2History(byType("e-Bridge")) };
@@ -376,7 +453,7 @@ const avgLine = { id: "avgline", afterDatasetsDraw(c) {
   ctx.setLineDash([5, 4]); ctx.strokeStyle = col; ctx.globalAlpha = .8; ctx.lineWidth = 1.2;
   ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
   ctx.setLineDash([]); ctx.globalAlpha = 1; ctx.fillStyle = col;
-  const txt = "avg " + v + "d"; ctx.font = "600 10.5px Inter, system-ui, sans-serif";
+  const txt = (((c.options.plugins || {}).avgLineLabel) || "avg ") + v + "d"; ctx.font = "600 10.5px Inter, system-ui, sans-serif";
   const w = ctx.measureText(txt).width + 10, h = 17;
   const px = right - w - 6;                               // inside the plot, hugging the right edge — never clips
   ctx.beginPath(); ctx.roundRect(px, y - h / 2, w, h, 4); ctx.fill();
@@ -518,76 +595,23 @@ function stageWindow(store) {                             // window indices for 
   let sdStart = 0; if (viewRange.from) { sdStart = sdDays.findIndex(d => d >= viewRange.from); if (sdStart < 0) sdStart = sdDays.length; }
   return { sd, sdDays, sdStart, sdEnd };
 }
-function computeStageRows(store) {                        // one source of truth: dashboard watchlist AND breakdown page
-  const { sd, sdDays, sdStart, sdEnd } = stageWindow(store);
-  const arr = s => (sd.series && sd.series[s]) || [];
-  const cur = s => { const a = arr(s); return sdEnd >= 0 && a[sdEnd] != null ? a[sdEnd] : null; };
-  const trend = s => {                                    // end of window vs ~30 days earlier (clamped); down = clearing (good)
-    const a = arr(s); if (!a.length || sdEnd < 0 || sdStart > sdEnd) return { kind: "empty" };
-    const c = a[sdEnd];
-    if (c == null) return a.slice(sdStart, sdEnd + 1).some(v => v != null) ? { kind: "cleared" } : { kind: "empty" };
-    const target = Math.max(sdStart, sdEnd - 30); let prev = null;
-    for (let i = target; i >= sdStart; i--) if (a[i] != null) { prev = a[i]; break; }
-    if (prev == null) for (let i = target + 1; i < sdEnd; i++) if (a[i] != null) { prev = a[i]; break; }
-    if (prev == null) return { kind: "new" };
-    const d = c - prev, pct = prev ? d / prev * 100 : null;
-    if (Math.abs(pct == null ? 0 : pct) < 10 && pct != null) return { kind: "flat", d, pct };
-    if (pct == null && d === 0) return { kind: "flat", d, pct };
-    return { kind: d > 0 ? "up" : "down", d, pct };
-  };
-  const rows = CONFIG.pipelineStages.filter(st => st !== LIVE_STAGE).map(st => ({ st, cur: cur(st), open: sd.open[st] ?? 0, t: trend(st) }))
-    .sort((a, b) => (b.cur ?? -1) - (a.cur ?? -1) || b.open - a.open);
-  return { sd, sdDays, sdStart, sdEnd, rows };
+/* ---------- Stage Health presentation maps (wording/colors live HERE, math lives in engine.js) ---------- */
+const ENG_LABEL = { aging: "Aging", building: "Backlog building", watch: "Watch", stalled: "Stalled", clearing: "Clearing", steady: "Steady", "no-history": "No history" };
+const ENG_SHORT = { building: "Building" };               // narrow watchlist column; full word everywhere else
+const ENG_CLS = { aging: "bad worse", building: "warn", watch: "warn", stalled: "warn", clearing: "good", steady: "flat", "no-history": "flat" };
+function engVerdictTitle(r) {                             // hover = the plain-language rule + this stage's numbers
+  const base = r.normal != null ? `typical ~${r.normal}d (this stage's own history)` : "no baseline yet";
+  if (r.key === "aging") return `Work is stuck past this stage's typical time · ${r.excess} overdue customer-days · oldest ${r.oldest}d · ${base}`;
+  if (r.key === "building") return `Arriving faster than leaving · net ${r.net > 0 ? "+" + r.net : r.net} over the 30-day flow window`;
+  if (r.key === "watch") return `At least one implementation is far past typical · oldest ${r.oldest}d · ${base}`;
+  if (r.key === "stalled") return `Has open work but nothing arrived or left in 30 days · oldest ${r.oldest}d`;
+  if (r.key === "clearing") return `Leaving faster than arriving · net ${r.net} over the 30-day flow window`;
+  if (r.key === "no-history") return `Fewer completed passes than the baseline needs — verdicts start once history builds`;
+  return `Within its normal range · ${base}`;
 }
-function stageInsights(sd, sdStart, sdEnd, trends) {
-  const stages = CONFIG.pipelineStages.filter(s => s !== LIVE_STAGE && (sd.series || {})[s]);
-  const arr = s => sd.series[s] || [];
-  const cur = s => { const a = arr(s); return sdEnd >= 0 && a[sdEnd] != null ? a[sdEnd] : null; };
-  const t = s => trends[s] || { kind: "empty" };
-  const rising = stages.filter(s => t(s).kind === "up");
-
-  const bottleneck = rising.filter(s => cur(s) != null)
-    .map(s => { const c = cur(s), o = (sd.open || {})[s] || 0; return { s, cur: c, open: o, score: o ? c * o : c }; })
-    .sort((a, b) => b.score - a.score || b.open - a.open || b.cur - a.cur);
-
-  const spikes = stages.map(s => {
-    const c = cur(s); if (c == null) return null;
-    const a = arr(s), base = [];
-    for (let i = sdEnd - 1; i >= sdStart && base.length < 14; i--) if (a[i] != null) base.push(a[i]);
-    if (base.length < 5) return null;
-    const mu = base.reduce((x, y) => x + y, 0) / base.length;
-    const sg = Math.sqrt(base.reduce((x, y) => x + (y - mu) * (y - mu), 0) / base.length);
-    if (c - mu < Math.max(2.5 * sg, 5)) return null;
-    return { s, cur: c, mu: Math.round(mu), z: (c - mu) / Math.max(sg, 1) };
-  }).filter(Boolean).sort((a, b) => b.z - a.z);
-
-  const worsening = rising.map(s => ({ s, d: t(s).d, pct: t(s).pct, cur: cur(s) ?? -1 }))
-    .sort((a, b) => b.d - a.d || b.cur - a.cur);
-
-  const improving = stages.map(s => {
-    const tr = t(s);
-    if (tr.kind === "down") return { s, d: tr.d, pct: tr.pct, mag: -tr.d, cleared: false };
-    if (tr.kind === "cleared") { const a = arr(s); let last = 0; for (let i = sdEnd; i >= sdStart; i--) if (a[i] != null) { last = a[i]; break; } return { s, d: null, mag: last, cleared: true }; }
-    return null;
-  }).filter(Boolean).sort((a, b) => b.mag - a.mag);
-
-  const used = new Set(), out = [];
-  const take = (list, mk) => { for (const c of list) { if (used.has(c.s)) continue; used.add(c.s); out.push(mk(c)); return; } };
-  take(bottleneck, c => ({ kind: "bottleneck", stage: c.s, severity: "red", values: { cur: c.cur, open: c.open } }));
-  take(spikes, c => ({ kind: "spike", stage: c.s, severity: "red", values: { cur: c.cur, mu: c.mu } }));
-  take(worsening, c => ({ kind: "worsening", stage: c.s, severity: "amber", values: { delta: c.d, pct: c.pct == null ? null : Math.round(c.pct), cur: c.cur } }));
-  take(improving, c => ({ kind: "improving", stage: c.s, severity: "green", values: { delta: c.d, pct: c.pct == null ? null : Math.round(c.pct), cleared: c.cleared } }));
-  const rank = { red: 0, amber: 1, green: 2 };
-  const res = out.slice(0, 4).sort((a, b) => rank[a.severity] - rank[b.severity]);
-  return res.length ? res : [{ kind: "none", stage: null, severity: "flat", values: {} }];
-}
-function insightText(f) {                                 // spec card templates, verbatim
-  const v = f.values;
-  if (f.kind === "bottleneck") return `${v.cur}d and rising · ${v.open} implementation${v.open === 1 ? "" : "s"} sitting here · the biggest drag on the pipeline`;
-  if (f.kind === "worsening") return `up ${v.delta}d${v.pct != null ? ` (${Math.abs(v.pct)}%)` : ""} vs ~30 days earlier · aging faster than any other stage`;
-  if (f.kind === "spike") return `jumped to ${v.cur}d, well above its recent ${v.mu}d average · worth a look today`;
-  if (f.kind === "improving") return v.cleared ? `cleared out completely this period` : `down ${Math.abs(v.delta)}d${v.pct != null ? ` (${Math.abs(v.pct)}%)` : ""} vs ~30 days earlier · clearing faster`;
-  return "No stages need attention this period · everything is holding steady";
+function engVerdictPill(r, short) {
+  const w = (short && ENG_SHORT[r.key]) || ENG_LABEL[r.key] || "—";
+  return `<span class="pill ${ENG_CLS[r.key] || "flat"}" title="${engVerdictTitle(r)}">${w}</span>`;
 }
 let pendOpen = false;                                     // session-only; resets on refresh like the collapse state
 function renderPendPanel(store) {
@@ -604,21 +628,42 @@ function renderPendPanel(store) {
     navigator.clipboard.writeText(lines).then(() => toast("List copied.")).catch(() => toast("Copy failed.", true));
   });
 }
-function renderInsights(findings) {
+function renderFocus(eview) {                             // 'Where to look first' = the engine's ranked focus list
   const box = document.getElementById("stageInsights"); if (!box) return;
-  const hasRows = findings.some(f => f.kind !== "none");
-  box.innerHTML = (hasRows ? `<div class="ins-hdr"><span></span><span>Stage</span><span>What&#39;s happening</span></div>` : "")
-    + findings.map(f => f.kind === "none"
-    ? `<div class="ins-card flat"><span class="ins-dot flat"></span><span>${insightText(f)}</span></div>`
-    : `<button type="button" class="ins-card" data-stage="${f.stage}"><span class="ins-dot ${f.severity}"></span><b title="${f.stage}">${f.stage}</b><span class="ins-txt">${insightText(f)}</span><span class="ins-go">chart it &#8594;</span></button>`).join("");
+  const rowsF = (eview && eview.focusRows) || [];
+  if (!rowsF.length) {
+    box.innerHTML = `<div class="ins-card flat"><span class="ins-dot flat"></span><span>Nothing is overdue · no stage is holding work past its typical time</span></div>`;
+    return;
+  }
+  const dot = r => r.key === "aging" ? (r.owner === "team" ? "red" : "amber") : r.key === "clearing" ? "green" : "amber";
+  const rowTxt = r => `${r.excess.toLocaleString()} overdue-days · ${r.countPastNormal} past the usual ~${r.normal ?? "—"}d · oldest ${r.oldest}d · ${r.owner === "customer" ? "customer-blocked" : "our team"}`;
+  const act = (eview.actFirst || []);
+  const bld = (eview.buildingRows || []);
+  box.innerHTML = `<div class="ins-hdr"><span></span><span>Stage</span><span>What&#39;s happening</span></div>`
+    + rowsF.map(r => `<button type="button" class="ins-card" data-stage="${r.stage}"><span class="ins-dot ${dot(r)}"></span><b title="${r.stage}">${r.stage}</b><span class="ins-txt">${rowTxt(r)}</span><span class="ins-go">chart it &#8594;</span></button>`).join("")
+    + `<div class="ins-card flat"><span class="ins-dot flat"></span><span>${act.length
+        ? `Act first — our team owns: <b style="color:var(--ink)">${act.join(", ")}</b>`
+        : `Top drags are customer-blocked · nudge the customer`}${bld.length
+        ? ` · also filling (capacity, not stuck): ${bld.map(b => `${b.stage} +${b.net}`).join(", ")}` : ""}</span></div>`;
   box.querySelectorAll("button.ins-card").forEach(b =>
     b.addEventListener("click", () => { selectedStage = b.dataset.stage; render(loadStore()); }));
+}
+function renderDrill(eng, stage) {                        // named records waiting in the selected stage (engine-computed, oldest first)
+  const box = document.getElementById("stageDrill"); if (!box) return;
+  const items = (eng && stage && eng.items[stage]) || [];
+  if (!stage || !items.length) { box.innerHTML = ""; box.classList.add("hidden"); return; }
+  box.classList.remove("hidden");
+  box.innerHTML = `<div class="drill-h">WAITING IN ${stage.toUpperCase()} · ${items.length} implementation${items.length === 1 ? "" : "s"} · oldest first</div>`
+    + `<div class="drill-list">` + items.map(i =>
+      `<div class="pend-row"><span class="pn" title="${i.name}">${i.name}</span><span class="pm">${i.product || ""}</span><span class="pm">${i.age}d in stage</span></div>`).join("") + `</div>`;
 }
 
 /* ---------- render ---------- */
 function render(store) {
   const dash = document.getElementById("dashboard"), empty = document.getElementById("empty");
-  if (currentView !== "dash") { dash.classList.add("hidden"); empty.classList.add("hidden"); if (!store.lastImport) return;
+  if (currentView !== "dash") { dash.classList.add("hidden"); empty.classList.add("hidden");
+    if (currentView === "snapshot") renderSnapshot();                    // product changes refresh the snapshot live
+    if (!store.lastImport) return;
     if (currentView === "stagebd") renderStageBd(); }                   // timeframe/product changes refresh the breakdown live
   else if (!store.lastImport) { dash.classList.add("hidden"); empty.classList.remove("hidden"); return; }
   else { empty.classList.add("hidden"); dash.classList.remove("hidden"); }
@@ -669,19 +714,16 @@ function render(store) {
   }
   const glKeys = Object.keys(glAll).sort();
 
-  const m2c = m2Sel(store);                              // monthly averages (chart line + legacy fallback)
+  const m2c = m2Sel(store);                              // monthly averages (legacy fallback only)
   const m2cropKeys = Object.keys(m2c).filter(inRange).sort();
-  const m2dc = m2dSel(store);                            // day-level {sum,n} -> exact record-weighted window averages
-  let speedTo = null, speedPrevV = null;
-  if (Object.keys(m2dc).length) {
-    let s = 0, n = 0, ps = 0, pn = 0;
-    Object.entries(m2dc).forEach(([d, v]) => {
-      if (inDayRange(d)) { s += v.s; n += v.n; }
-      else if (d >= pFrom && d <= pTo) { ps += v.s; pn += v.n; }
-    });
-    speedTo = n ? Math.round(s / n) : null;
-    speedPrevV = pn ? Math.round(ps / pn) : null;
-  } else {                                               // legacy store without day-level durations: month-bucket approximation
+  const m2l = (store.m2list || {})[cohort] || [];        // day-level PO->live durations (engine definition: PO date to live date)
+  const medOf = a => { if (!a.length) return null; const s2 = [...a].sort((x, y) => x - y); return s2[Math.min(s2.length - 1, Math.floor(s2.length / 2))]; };   // same percentile rule as the engine
+  let speedTo = null, speedPrevV = null, speedN = 0;
+  if (m2l.length) {                                      // MEDIAN, not average — matches the audited engine's speed line
+    const inW = [], prW = [];
+    m2l.forEach(x => { if (inDayRange(x.d)) inW.push(x.v); else if (x.d >= pFrom && x.d <= pTo) prW.push(x.v); });
+    speedTo = medOf(inW); speedPrevV = priorHasData ? medOf(prW) : null; speedN = inW.length;
+  } else {                                               // legacy store without day-level durations: month-bucket average approximation
     speedTo = m2cropKeys.length ? Math.round(mean(m2cropKeys.map(k => m2c[k]))) : null;
     const m2prevKeys = Object.keys(m2c).filter(m => { const [y, mo] = m.split("-").map(Number); const last = new Date(Date.UTC(y, mo, 0)).getUTCDate(); return (m + "-01") <= pTo && (m + "-" + String(last).padStart(2, "0")) >= pFrom; }).sort();
     speedPrevV = m2prevKeys.length ? Math.round(mean(m2prevKeys.map(k => m2c[k]))) : null;
@@ -784,26 +826,25 @@ function render(store) {
     document.querySelector("#sec-speed h3").textContent = "PO TO GO-LIVE" + cohortLabel();
     document.getElementById("speedNow").textContent = speedTo;
     document.getElementById("speedPill").innerHTML = speedDelta != null ? pill(speedDelta, true) + ` <span style="font-size:12px;color:var(--hint)">vs ${priorName}</span>` : "";
-    let spN = 0;
-    if (Object.keys(m2dc).length) {                      // full history; weekly buckets at minimum so single-go-live days don't read as trend
+    if (m2l.length) {                                    // full history; weekly buckets at minimum so single-go-live days don't read as trend
       const spBucket = glBucket === "day" ? "week" : glBucket;
       const spKey = d => spBucket === "month" ? d.slice(0, 7)
         : (() => { const dt = new Date(d + "T00:00:00Z"); return dstr(new Date(dt.getTime() - ((dt.getUTCDay() + 6) % 7) * MS_PER_DAY)); })();
       const spFmt = spBucket === "month" ? fmtMonth : fmtDay;
       const spB = {};
-      Object.entries(m2dc).forEach(([d, v]) => { const k = spKey(d); (spB[k] ||= { s: 0, n: 0 }); spB[k].s += v.s; spB[k].n += v.n; if (inDayRange(d)) spN += v.n; });
-      const spPts = Object.keys(spB).sort().map(k => ({ m: k, v: Math.round(spB[k].s / spB[k].n), n: spB[k].n }));
+      m2l.forEach(x => { const k = spKey(x.d); (spB[k] ||= []).push(x.v); });
+      const spPts = Object.keys(spB).sort().map(k => ({ m: k, v: medOf(spB[k]), n: spB[k].length }));
       areaChart("speedChart", spPts, 110, spFmt, viewRange, {
-        tooltipLabel: c => ` ${c.parsed.y} days · avg of ${spPts[c.dataIndex] ? spPts[c.dataIndex].n : "?"} go-live${spPts[c.dataIndex] && spPts[c.dataIndex].n === 1 ? "" : "s"}`,
+        tooltipLabel: c => ` ${c.parsed.y} days · median of ${spPts[c.dataIndex] ? spPts[c.dataIndex].n : "?"} go-live${spPts[c.dataIndex] && spPts[c.dataIndex].n === 1 ? "" : "s"}`,
       });
-      const spC = charts["speedChart"]; if (spC) { spC.options.plugins.lastValOff = true; spC.options.plugins.avgLineValue = speedTo; spC.update("none"); }
+      const spC = charts["speedChart"]; if (spC) { spC.options.plugins.lastValOff = true; spC.options.plugins.avgLineValue = speedTo; spC.options.plugins.avgLineLabel = "median "; spC.update("none"); }
     } else areaChart("speedChart", Object.keys(m2c).sort().map(k => ({ m: k, v: m2c[k] })), 110, fmtMonth, viewRange);   // legacy store: monthly line
     let spRecent = "";
     if (charts["speedChart"]) { const c = charts["speedChart"], dsv = c.data.datasets[0].data;
       let lastV = null; for (let i = Math.floor(c.scales.x.max); i >= Math.ceil(c.scales.x.min); i--) if (dsv[i] != null) { lastV = dsv[i]; break; }
       if (lastV != null && speedTo && lastV >= speedTo * 1.2) spRecent = ` · recent go-lives trending ~${lastV}d`; }
-    const spMiss = Math.max(0, glWinTotal - spN);
-    document.getElementById("speedCap").textContent = `Go-lives in the selected period averaged ${speedTo} days from Purchase Order to Go-Live` + (spN ? ` across ${spN} go-lives` : "") +
+    const spMiss = Math.max(0, glWinTotal - speedN);
+    document.getElementById("speedCap").textContent = `Go-lives in the selected period took a median ${speedTo} days from Purchase Order to Go-Live` + (speedN ? ` across ${speedN} go-lives` : "") +
       (speedDelta != null ? (speedDelta < 0 ? ` · ${Math.abs(speedDelta)} days faster than the ${priorName}` : speedDelta > 0 ? ` · ${speedDelta} days slower than the ${priorName}` : ` · unchanged from the ${priorName}`) : "") +
       spRecent + (spMiss ? ` · ${spMiss} go-live${spMiss === 1 ? "" : "s"} missing a PO date aren't plotted` : "") + ".";
   } else {
@@ -813,42 +854,39 @@ function render(store) {
     document.getElementById("speedCap").textContent = "No completed implementations in the selected period.";
   }
 
-  // stage feature — TradingView watchlist + DAILY price chart, reconstructed from stage entered/exited dates
+  // stage feature — TradingView watchlist + DAILY price chart; verdicts and overdue-days come from the engine
   document.querySelector("#sec-stage h3").textContent = "TIME IN STAGE" + cohortLabel();
-  const { sd, sdDays, sdStart, sdEnd, rows } = computeStageRows(store);
+  const eng = engSel(store);
+  const eview = eng ? eng.views["30"] : null;             // dashboard stage slots read the 30-day flow window
+  const { sd, sdDays, sdEnd } = stageWindow(store);       // daily avg-days series drives the chart pane only
   function stageArr(s) { return (sd.series && sd.series[s]) || []; }
-  function trendBadge(t) {
-    const pctTxt = t.pct == null ? null : Math.round(Math.abs(t.pct)) + "%";
-    if (t.kind === "up") return `<span class="pill bad worse" title="Aging · up ${t.d}d vs ~30 days earlier">&#9650; ${pctTxt != null ? pctTxt : t.d + "d"}</span>`;
-    if (t.kind === "down") return `<span class="pill good" title="Clearing · down ${Math.abs(t.d)}d vs ~30 days earlier">&#9660; ${pctTxt != null ? pctTxt : Math.abs(t.d) + "d"}</span>`;
-    if (t.kind === "cleared") return `<span class="pill good">&#9660; cleared</span>`;
-    if (t.kind === "flat") return `<span class="pill flat">&#9644; flat</span>`;
-    if (t.kind === "new") return `<span class="pill flat">new</span>`;
-    return `<span class="pill flat">—</span>`;
-  }
+  const curAvg = s => { const a = stageArr(s); return sdEnd >= 0 && a[sdEnd] != null ? a[sdEnd] : null; };
+  const rows = eview ? [...eview.tableRows].sort((a, b) => b.excess - a.excess || b.wip - a.wip) : [];
 
-  if (!selectedStage || !CONFIG.pipelineStages.includes(selectedStage)) selectedStage = rows[0] ? rows[0].st : null;
+  if (!selectedStage || !rows.some(r => r.stage === selectedStage)) selectedStage = rows[0] ? rows[0].stage : null;
 
   syncWlToggle();                                        // re-apply the collapse state on every render
-  document.getElementById("stageList").innerHTML = rows.map(s =>
-    `<div class="wl-row${s.st === selectedStage ? " sel" : ""}" data-stage="${s.st}" role="button" tabindex="0" aria-pressed="${s.st === selectedStage}">
-      <span class="wnm" title="${s.st}">${s.st}</span>
-      <span class="wcnt" title="open implementations sitting in this stage">${s.open || 0}</span>
-      <span class="wlast">${s.cur != null ? s.cur + "d" : "—"}</span>${trendBadge(s.t)}</div>`).join("");
+  document.getElementById("stageList").innerHTML = rows.length ? rows.map(r =>
+    `<div class="wl-row${r.stage === selectedStage ? " sel" : ""}" data-stage="${r.stage}" role="button" tabindex="0" aria-pressed="${r.stage === selectedStage}">
+      <span class="wnm" title="${r.stage}">${r.stage}</span>
+      <span class="wcnt" title="open implementations sitting in this stage">${r.wip || 0}</span>
+      <span class="wlast" title="overdue customer-days past this stage's typical ~${r.normal ?? "—"}d · oldest item ${r.oldest}d">${r.excess ? r.excess.toLocaleString() : "0"}</span>${engVerdictPill(r, true)}</div>`).join("")
+    : `<div style="padding:14px;color:var(--hint);font-size:12.5px">Stage health needs a fresh import · re-import your latest HubSpot export</div>`;
   document.querySelectorAll("#stageList .wl-row").forEach(el => {
     const pick = () => { selectedStage = el.dataset.stage; render(loadStore()); };
     el.addEventListener("click", pick);
     el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
   });
 
-  const sel = rows.find(r => r.st === selectedStage) || rows[0];
-  document.getElementById("cpName").textContent = sel ? sel.st : "—";
-  document.getElementById("cpPrice").textContent = sel && sel.cur != null ? sel.cur + "d" : "—";
-  document.getElementById("cpBadge").innerHTML = sel ? trendBadge(sel.t) : "";
+  const sel = rows.find(r => r.stage === selectedStage) || rows[0];
+  const selAvg = sel ? curAvg(sel.stage) : null;
+  document.getElementById("cpName").textContent = sel ? sel.stage : "—";
+  document.getElementById("cpPrice").textContent = selAvg != null ? selAvg + "d" : "—";
+  document.getElementById("cpBadge").innerHTML = sel ? engVerdictPill(sel) : "";
   destroy("stageBig");
   if (sel && sdDays.length) {
     // Same baseline-chart implementation as OPEN PIPELINE TREND / PO TO GO-LIVE (areaChart), full daily history.
-    const fullArr = stageArr(sel.st);
+    const fullArr = stageArr(sel.stage);
     document.getElementById("cpSub").textContent = `Daily detail · hover to read · ${MODLBL} + scroll to zoom · drag to pan · double-click to reset`;
     areaChart("stageBig", sdDays.map((d, i) => ({ m: d, v: fullArr[i] })), 300, fmtDay, viewRange, {
       tooltipLabel: c => c.parsed.y == null ? " no open work" : ` ${c.parsed.y} days`,
@@ -859,16 +897,17 @@ function render(store) {
     const el = document.getElementById("stageBig");
     const syncLeave = el.onmouseleave;                    // compose: crosshair-sync clear + readout reset
     el.onmouseleave = e => { if (syncLeave) syncLeave(e);
-      document.getElementById("cpPrice").textContent = sel.cur != null ? sel.cur + "d" : "—"; document.getElementById("cpReadout").textContent = ""; };
-    renderInsights(stageInsights(sd, sdStart, sdEnd, Object.fromEntries(rows.map(r => [r.st, r.t]))));
-  } else { const box = document.getElementById("stageInsights"); if (box) box.innerHTML = ""; }
+      document.getElementById("cpPrice").textContent = selAvg != null ? selAvg + "d" : "—"; document.getElementById("cpReadout").textContent = ""; };
+  }
+  renderFocus(eview);
+  renderDrill(eng, sel ? sel.stage : null);
 
-  const up = rows.filter(s => s.t.kind === "up").length;
-  const down = rows.filter(s => s.t.kind === "down" || s.t.kind === "cleared").length;
-  const flat = rows.filter(s => s.t.kind === "flat").length;
-  document.getElementById("stageSummary").innerHTML = sdDays.length
-    ? `<span><b style="color:var(--bad)">${up}</b> aging</span><span><b style="color:var(--good)">${down}</b> clearing</span><span><b>${flat}</b> steady</span>`
-    : `<span>This needs the stage date columns · included when you export with "All properties"</span>`;
+  const eb = eview ? eview.execBand : null;
+  document.getElementById("stageSummary").innerHTML = !eb
+    ? `<span>This needs the stage date columns · included in the standard export</span>`
+    : (eb.totalExcess
+      ? `<span><b style="color:var(--bad)">${eb.totalExcess.toLocaleString()}</b> overdue-days</span><span><b>${eb.concentrationPct}%</b> sits in ${eb.topDrags.length} stage${eb.topDrags.length === 1 ? "" : "s"}</span>`
+      : `<span><b style="color:var(--good)">0</b> overdue-days · nothing past typical</span>`);
 
   const dataThrough = bounds ? bounds[1] : null;
   const importedOn = store.lastImport.when ? store.lastImport.when.slice(0, 10) : null;
@@ -879,8 +918,10 @@ function render(store) {
   renderPendPanel(store);
   const sW = document.getElementById("stageWarn");
   if (sW) { const u = store.unknownStages || [];
-    sW.classList.toggle("hidden", !u.length);
-    if (u.length) sW.textContent = u.map(x => `Unrecognized stage "${x.name}" · ${x.count} implementation${x.count === 1 ? "" : "s"} not shown in Time in Stage`).join(" · ") + " · report this so the stage can be added"; }
+    const msgs = u.map(x => `Unrecognized stage "${x.name}" · ${x.count} implementation${x.count === 1 ? "" : "s"} not shown in Time in Stage · report this so the stage can be added`)
+      .concat(((eview && eview.notices) || []).map(f => `Data check: ${f.stage ? f.stage + " — " : ""}${f.msg}`));
+    sW.classList.toggle("hidden", !msgs.length);
+    if (msgs.length) sW.textContent = msgs.join(" · "); }
 }
 
 function syncRangeInputs() {                              // reflect viewRange into the day-level date inputs
@@ -1012,51 +1053,52 @@ function fmtDateTime(iso) { const d = new Date(iso); return d.toLocaleDateString
 
 function showView(v) {
   currentView = v;
-  const hist = document.getElementById("history"), howto = document.getElementById("howto"), sbd = document.getElementById("stagebd");
+  const hist = document.getElementById("history"), howto = document.getElementById("howto"), sbd = document.getElementById("stagebd"), snp = document.getElementById("snapshot");
   hist.classList.toggle("hidden", v !== "history");
   howto.classList.toggle("hidden", v !== "howto");
   if (sbd) sbd.classList.toggle("hidden", v !== "stagebd");
+  if (snp) snp.classList.toggle("hidden", v !== "snapshot");
   document.querySelectorAll(".nav a").forEach(x =>
     x.classList.toggle("on", v === "dash" ? x.dataset.goto === "kpis" : x.dataset.view === v));
   if (v === "history") renderHistory();
   if (v === "stagebd") renderStageBd();
+  if (v === "snapshot") renderSnapshot();
   if (v !== "history") document.getElementById("histPreview").classList.add("hidden");
   render(loadStore());
 }
-let sbSort = { col: "cur", dir: -1 };                     // default: slowest first (matches the watchlist)
+let sbSort = { col: "excess", dir: -1 };                  // default: biggest drag first (matches the watchlist)
 function renderStageBd() {
   const store = loadStore();
-  const { rows } = computeStageRows(store);
-  const totOpen = rows.reduce((s, r) => s + (r.open || 0), 0) || 1;
+  const eng = engSel(store);
+  const eview = eng ? eng.views["30"] : null;
+  if (!eview) { document.getElementById("sbSub").textContent = "Stage health needs a fresh import \u00b7 re-import your latest HubSpot export";
+    document.getElementById("sbTable").innerHTML = ""; return; }
+  const rows = eview.tableRows;
+  const totOpen = rows.reduce((s, r) => s + (r.wip || 0), 0) || 1;
+  const rankOf = { aging: 0, building: 1, watch: 2, stalled: 3, clearing: 4, steady: 5, "no-history": 6 };
   const enr = rows.map(r => {
-    const share = (r.open || 0) / totOpen * 100;
-    const load = r.open === 0 ? { w: "\u2014", cls: "flat" } : share >= 10 ? { w: "Heavy", cls: "warn" } : share >= 5 ? { w: "Moderate", cls: "flat" } : { w: "Light", cls: "flat" };
-    const tr = r.t.kind === "up" ? { w: "Aging", cls: "bad", rank: 0 } : r.t.kind === "new" ? { w: "No history", cls: "flat", rank: 1 }
-      : r.t.kind === "flat" ? { w: "Steady", cls: "flat", rank: 2 } : r.t.kind === "down" ? { w: "Clearing", cls: "good", rank: 3 }
-      : r.t.kind === "cleared" ? { w: "Emptied", cls: "good", rank: 4 } : { w: "\u2014", cls: "flat", rank: 5 };
-    return { ...r, share, load, tr, pct: r.t.pct == null ? null : Math.round(r.t.pct) };
+    const share = (r.wip || 0) / totOpen * 100;
+    const load = r.wip === 0 ? { w: "\u2014", cls: "flat" } : share >= 10 ? { w: "Heavy", cls: "warn" } : share >= 5 ? { w: "Moderate", cls: "flat" } : { w: "Light", cls: "flat" };
+    return { ...r, share, load, rank: rankOf[r.key] ?? 9 };
   });
-  const key = { stage: r => r.st, trend: r => -r.tr.rank, load: r => r.share, pct: r => r.pct ?? (r.t.d > 0 ? 10000 + r.t.d : r.t.d != null ? -10000 : -99999), open: r => r.open, share: r => r.share, cur: r => r.cur ?? -1 }[sbSort.col];
+  const key = { stage: r => r.stage, verdict: r => -r.rank, load: r => r.share, excess: r => r.excess, open: r => r.wip, share: r => r.share, typical: r => r.normal ?? -1 }[sbSort.col];
   enr.sort((a, b) => { const x = key(a), y = key(b); return (x < y ? -1 : x > y ? 1 : 0) * sbSort.dir; });
-  document.getElementById("sbSub").textContent = `Every stage's health at a glance${cohortLabel()} · ${fmtDay(viewRange.from)} to ${fmtDay(viewRange.to)} · click a column to sort · click a stage to chart it`;
-  const hdr = [["stage", "Stage"], ["trend", "Trend"], ["load", "Load"], ["pct", "vs ~30d"], ["open", "Open"], ["share", "% of backlog"], ["cur", "Avg days"]];
+  document.getElementById("sbSub").textContent = `Every stage's health at a glance${cohortLabel()} \u00b7 verdicts come from each stage's own history \u00b7 flow measured over the 30 days before ${fmtDay(eng.snapDate)} \u00b7 click a column to sort \u00b7 click a stage to chart it`;
+  const hdr = [["stage", "Stage"], ["verdict", "Verdict"], ["load", "Load"], ["excess", "Overdue-days"], ["open", "Open"], ["share", "% of backlog"], ["typical", "Typical"]];
   const arrow = c => sbSort.col === c ? (sbSort.dir < 0 ? " \u25be" : " \u25b4") : "";
-  const vsCell = r => {
-    if (r.t.kind !== "up" && r.t.kind !== "down") return `<span class="sb-r">\u2014</span>`;
-    const up = r.t.kind === "up";
-    const txt = r.pct == null ? `${up ? "+" : ""}${r.t.d}d from 0` : `${Math.abs(r.pct)}%`;
-    return `<span class="sb-r"><span class="pill ${up ? "bad worse" : "good"}" title="${up ? "Aging · up " + r.t.d : "Clearing · down " + Math.abs(r.t.d)}d vs ~30 days earlier">${up ? "\u25b2" : "\u25bc"} ${txt}</span></span>`;
-  };
+  const exCell = r => r.excess
+    ? `<span class="sb-r"><span class="pill bad worse" title="${r.excess} customer-days past this stage's typical ~${r.normal ?? "\u2014"}d \u00b7 oldest item ${r.oldest}d">${r.excess.toLocaleString()}d</span></span>`
+    : `<span class="sb-r">\u2014</span>`;
   document.getElementById("sbTable").innerHTML =
     `<div class="sb-grid">` + hdr.map(([c, l], i) => `<div class="sb-h${i > 2 ? " sb-r" : ""}${sbSort.col === c ? " on" : ""}" data-sb="${c}" role="button" tabindex="0" aria-sort="${sbSort.col === c ? (sbSort.dir < 0 ? "descending" : "ascending") : "none"}" title="click to sort">${l}${arrow(c)}</div>`).join("") + `</div>`
-    + enr.map(r => `<div class="sb-grid sb-row" data-stage="${r.st}" role="button" tabindex="0">
-      <span class="sb-name" title="${r.st}">${r.st}</span>
-      <span class="pill ${r.tr.cls === "warn" ? "flat" : r.tr.cls}${r.tr.cls === "bad" ? " worse" : ""}">${r.tr.w}</span>
+    + enr.map(r => `<div class="sb-grid sb-row" data-stage="${r.stage}" role="button" tabindex="0">
+      <span class="sb-name" title="${r.stage}${r.owner === "customer" ? " \u00b7 waiting on the customer in this stage" : ""}">${r.stage}</span>
+      ${engVerdictPill(r)}
       <span class="pill ${r.load.cls === "warn" ? "bad" : "flat"}" ${r.load.w === "Heavy" ? 'style="background:rgba(240,162,78,.18);color:#b7791f"' : ""}>${r.load.w}</span>
-      ${vsCell(r)}
-      <span class="sb-r">${r.open || 0}</span>
-      <span class="sb-r">${r.open ? Math.round(r.share) + "%" : "\u2014"}</span>
-      <span class="sb-r">${r.cur != null ? r.cur + "d" : "\u2014"}</span>
+      ${exCell(r)}
+      <span class="sb-r">${r.wip || 0}</span>
+      <span class="sb-r">${r.wip ? Math.round(r.share) + "%" : "\u2014"}</span>
+      <span class="sb-r" title="${r.normal != null ? "usually ~" + r.normal + "d in this stage (its own history, " + r.n + " completed passes) \u00b7 p95 " + (r.p95 ?? "\u2014") + "d" : "not enough completed passes for a baseline"}">${r.normal != null ? "~" + r.normal + "d" : "\u2014"}</span>
     </div>`).join("");
   document.querySelectorAll("[data-sb]").forEach(h => {
     const go = () => { const c = h.dataset.sb;
@@ -1071,6 +1113,82 @@ function renderStageBd() {
     el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
   });
 }
+/* ---------- Snapshot (leadership summary; add-on view, same engine data) ---------- */
+let snapPeriod = "30";
+const SNAP_INTAKE = { "keeping-pace": "keeping pace", behind: "falling behind", "catching-up": "catching up" };
+const SNAP_SPEED = { faster: "faster than the prior window", slower: "slower than the prior window", "about-the-same": "about the same as the prior window", "n/a": "no prior import to compare" };
+function snapView(store) {                                // current cohort + period's engine view (null if unavailable)
+  const eng = engSel(store); if (!eng) return null;
+  const v = eng.views[snapPeriod] || eng.views["30"]; if (!v) return null;
+  return { eng, v, e: v.execBand };
+}
+function snapshotText(store) {
+  const s = snapView(store); if (!s) return "";
+  const { eng, v, e } = s;
+  const pLabel = (ENG_PERIODS.find(x => x[1] === snapPeriod) || ENG_PERIODS[1])[0];
+  const drags = e.topDrags.map(d => { const f = v.focusRows.find(x => x.stage === d.stage) || {}; return `${d.stage} (${d.excess} overdue-days, ${f.owner === "customer" ? "customer" : "our team"})`; }).join(", ");
+  return [
+    `Implementation Health — snapshot through ${fmtDay(eng.snapDate)} (${pLabel}${cohort === "all" ? "" : " · " + cohort})${store.demo ? " — SAMPLE DATA" : ""}`,
+    `Backlog: ${e.open} open${e.openDelta != null ? ` (${e.openDelta > 0 ? "+" : ""}${e.openDelta} vs last import)` : ""}.`,
+    e.topDrags.length ? `${e.concentrationPct}% of the overdue wait sits in: ${drags}.` : `Nothing is overdue.`,
+    `Intake ${SNAP_INTAKE[e.intakeState]} (${e.arrivals} in / ${e.departs} done over ${pLabel.toLowerCase()}).`,
+    e.medLead != null ? `${e.goLives} went live, median ${e.medLead} days from PO to live (${SNAP_SPEED[e.speedState]}).` : "",
+  ].filter(Boolean).join("\n");
+}
+function renderSnapshot() {
+  const el = document.getElementById("snapshot"); if (!el) return;
+  const store = loadStore();
+  const s = store.lastImport ? snapView(store) : null;
+  if (!s) {
+    el.innerHTML = `<section class="card" style="max-width:860px">
+      <div class="row-h"><div><h3>LEADERSHIP SNAPSHOT</h3><p class="ch-sub">A leadership-ready summary built from the same data as the dashboard</p></div></div>
+      <div style="color:var(--hint);padding:20px 0">${!store.lastImport ? "Import your HubSpot export first · the snapshot builds itself from the data" : "Stage health needs a fresh import · re-import your latest HubSpot export"}</div></section>`;
+    return;
+  }
+  const { eng, v, e } = s;
+  const pLabel = (ENG_PERIODS.find(x => x[1] === snapPeriod) || ENG_PERIODS[1])[0];
+  const q1 = e.topDrags.length
+    ? `<b>${e.concentrationPct}%</b> of the delay <span class="sa-sub">· in ${e.topDrags.length} stage${e.topDrags.length > 1 ? "s" : ""}</span>`
+    : `<b>None</b> <span class="sa-sub">· nothing overdue</span>`;
+  const q2 = `<b>${e.open.toLocaleString()}</b> open` + (e.openDelta == null ? "" : ` <span class="${e.openDelta > 0 ? "sa-up" : "sa-dn"}">${e.openDelta > 0 ? "▲ +" : "▼ "}${e.openDelta}</span> <span class="sa-sub">vs last import</span>`);
+  const q3 = `<b>${e.arrivals}</b> in / <b>${e.departs}</b> done <span class="sa-sub">· ${SNAP_INTAKE[e.intakeState]}</span>`;
+  const q4 = e.medLead == null ? `<b>—</b> <span class="sa-sub">no completed go-lives with a PO date in this window</span>`
+    : `median <b>${e.medLead}d</b> to live <span class="sa-sub">· ${e.goLives} went live · ${SNAP_SPEED[e.speedState]}</span>`;
+  const dragRows = e.topDrags.length ? e.topDrags.map((d, i) => {
+    const f = v.focusRows.find(x => x.stage === d.stage) || {};
+    return `<div class="pend-row"><span class="pn"><span class="sd-rank">${i + 1}</span>${d.stage}</span><span class="pm"><span class="pill ${f.owner === "customer" ? "warn" : "flat"}">${f.owner === "customer" ? "customer" : "our team"}</span></span><span class="pm">${d.excess.toLocaleString()} overdue-days</span></div>`;
+  }).join("") : `<div style="color:var(--hint);padding:10px 0">No stage is carrying overdue work right now.</div>`;
+  el.innerHTML = `
+    <section class="card" id="snapCard">
+      <div class="row-h"><div><h3>LEADERSHIP SNAPSHOT${cohortLabel()}</h3>
+        <p class="ch-sub">Snapshot through ${fmtDay(eng.snapDate)} · flow measured over ${pLabel.toLowerCase()} · the four questions leadership asks${store.demo ? " · SAMPLE DATA" : ""}</p></div>
+        <span class="tf" id="snapPeriods" data-html2canvas-ignore>${ENG_PERIODS.map(([lbl, val]) => `<button data-p="${val}" class="${snapPeriod === val ? "on" : ""}">${lbl}</button>`).join("")}</span></div>
+      <div class="snap-stmts">
+        <div class="snap-stmt"><span class="sq">Where is the delay concentrated?</span><span class="sa">${q1}</span></div>
+        <div class="snap-stmt"><span class="sq">Is the backlog growing?</span><span class="sa">${q2}</span></div>
+        <div class="snap-stmt"><span class="sq">Are we keeping up with incoming work?</span><span class="sa">${q3}</span></div>
+        <div class="snap-stmt"><span class="sq">How fast are we delivering?</span><span class="sa">${q4}</span></div>
+      </div>
+      <div class="drill-h" style="margin-top:16px">WHERE THE DELAY SITS</div>
+      ${dragRows}
+    </section>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn" id="snapCopy">Copy summary</button>
+      <button class="btn" id="snapPng">Download PNG</button>
+    </div>`;
+  document.querySelectorAll("#snapPeriods button").forEach(b => b.addEventListener("click", () => { snapPeriod = b.dataset.p; renderSnapshot(); }));
+  const cp = document.getElementById("snapCopy");
+  if (cp) cp.addEventListener("click", () => navigator.clipboard.writeText(snapshotText(loadStore())).then(() => toast("Summary copied.")).catch(() => toast("Copy failed.", true)));
+  const dl = document.getElementById("snapPng");
+  if (dl) dl.addEventListener("click", () => {
+    const card = document.getElementById("snapCard"); if (!card || !window.html2canvas) { toast("PNG export unavailable.", true); return; }
+    const dark = document.documentElement.getAttribute("data-theme") === "dark";
+    html2canvas(card, { backgroundColor: dark ? "#0e1320" : "#eef1f5", scale: 2, useCORS: true }).then(cv => {
+      const a = document.createElement("a"); a.href = cv.toDataURL("image/png"); a.download = "implementation-health-snapshot.png"; a.click();
+    }).catch(() => toast("PNG export failed.", true));
+  });
+}
+
 function renderHistory() {
   const arr = loadImports();
   document.getElementById("histList").innerHTML = arr.length ? arr.map((e, i) => `
@@ -1118,14 +1236,14 @@ function noteShow(msg, kind) { const n = document.getElementById("importNote"); 
   n.className = "inote" + (kind === "err" ? " err" : ""); document.getElementById("importNoteMsg").innerHTML = msg; }
 function noteHide() { const n = document.getElementById("importNote"); if (n) n.className = "inote hidden"; }
 function handleFile(file) { const r = new FileReader(); r.onload = e => {
-  try { const records = normalize(parseCSV(e.target.result)); if (!records.length) throw new Error("No records found.");
+  try { const rows = parseCSV(e.target.result); const records = normalize(rows); if (!records.length) throw new Error("No records found.");
     const prev = loadStore().lastImport;
     if (prev && prev.records && Math.abs(records.length - prev.records) / prev.records > 0.2) {
       if (!confirm(`This file has ${records.length} implementations; the last import had ${prev.records}. A HubSpot filter may have been left on. Import anyway?`)) return;
     }
     const nameM = (file.name || "").match(CONFIG.filenameDateRegex);
     const snap = nameM ? `${nameM[1]}-${nameM[2]}` : monthKey(new Date());
-    const store = applyImport(loadStore(), records, snap);
+    const store = applyImport(loadStore(), records, snap, toEngineRecords(rows), file.name);
     if (/^sample-data\.csv$/i.test((file.name || "").trim())) store.demo = true;   // the bundled sample stays labeled sample
     saveStore(store);
     logImport({ fileName: file.name, importedAt: new Date().toISOString(), snapMonth: snap, records: records.length, older: !!store.lastImport.older, csv: e.target.result });
@@ -1273,14 +1391,14 @@ function init() {
   // Self-heal stores written by older app versions: replay the retained Import-history files in snapshot order.
   // Guarded by a fingerprint (store's own lastImport must match a history entry) so a restored backup is never
   // clobbered by unrelated files sitting in this browser's history; unmatched stores just use the legacy fallbacks.
-  if (s0.lastImport && (!s0.pendingDaily || !s0.m2d)) {
+  if (s0.lastImport && (!s0.pendingDaily || !s0.m2d || !s0.eng || !s0.m2list)) {
     const imps = loadImports().filter(e => e.csv);
     const matches = imps.some(e => e.snapMonth === s0.lastImport.month && e.records === s0.lastImport.records);
     if (imps.length && matches) { try {
       const wasDemo = !!s0.demo;
       let rebuilt = blankStore();
       [...imps].sort((a, b) => (a.snapMonth || "").localeCompare(b.snapMonth || ""))
-        .forEach(e => { rebuilt = applyImport(rebuilt, normalize(parseCSV(e.csv)), e.snapMonth); });
+        .forEach(e => { const rows = parseCSV(e.csv); rebuilt = applyImport(rebuilt, normalize(rows), e.snapMonth, toEngineRecords(rows), e.fileName); });
       rebuilt.demo = wasDemo;
       s0 = rebuilt; saveStore(s0);
     } catch (e) { } }
@@ -1298,8 +1416,9 @@ function init() {
 }
 function loadDemo() {                                     // bundled sample so the demo experience works out of the box
   fetch("sample-data.csv").then(r => { if (!r.ok) throw 0; return r.text(); }).then(text => {
-    const records = normalize(parseCSV(text));
-    const store = applyImport(loadStore(), records, "2026-07");
+    const rows = parseCSV(text);
+    const records = normalize(rows);
+    const store = applyImport(loadStore(), records, "2026-07", toEngineRecords(rows), "sample-data_2026-07-01.csv");
     store.demo = true; saveStore(store);
     logImport({ fileName: "sample-data.csv (demo)", importedAt: new Date().toISOString(), snapMonth: "2026-07", records: records.length, older: false, csv: text });
     showView("dash");
