@@ -31,6 +31,7 @@ const CONFIG = {
     "On-hold", "Go-Live Scheduled", "Implementation Live/Complete",
   ],
 };
+const escHtml = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const MS_PER_DAY = 86400000, STORE_KEY = "impl_trends_history_v1", THEME_KEY = "impl_trends_theme", TF_KEY = "impl_trends_tf";
 const CP = "#2f6ded", EB = "#ea8a2f", GOOD = "#15803d", BAD = "#dc2626", GRAY = "#9aa2af", BLUE = "#2f6ded";
 // TradingView Baseline palette, mapped to BUSINESS health (all baseline charts here are lower-is-better):
@@ -246,8 +247,19 @@ async function applyImport(store, records, snap, engRecords, fileName) {
   if (!older) {                                          // newest file wins for the backfilled metrics
     const byType = t => records.filter(r => r.types.includes(t));
     if (engRecords) {                                    // Stage Health engine: computed once per import, stored as view models
-      const prevSnap = (store.eng && store.eng.prevSaved) || null;
+      // trend memory only chains between like imports: a real import never
+      // compares against the sample's snapshot (spurious count-swing/collapse
+      // banners on the first real import), and vice versa. Provenance lives on
+      // the engine blob itself (fromDemo) — store.demo can flip false on an
+      // older-month import that skips engine recompute, which would leak a
+      // demo-origin snapshot into the next real comparison. Pre-upgrade blobs
+      // lack the field; undefined coerces to false = real, keeping real->real
+      // chains intact across the upgrade.
+      const incomingDemo = /^sample-data/i.test((fileName || "").trim());
+      const prevSnap = (store.eng && store.eng.prevSaved && !!store.eng.fromDemo === incomingDemo)
+        ? store.eng.prevSaved : null;
       store.eng = await computeEngineViews(engRecords, fileName, prevSnap);
+      store.eng.fromDemo = incomingDemo;                 // provenance: which kind of import produced this snapshot
       // day-level PO->live durations (engine definition: PO date to live date) for the median headline/chart
       const leadList = recs2 => recs2.filter(r => r.poDate && r.liveDate)
         .map(r => ({ d: dstr(r.liveDate), v: Math.round((r.liveDate - r.poDate) / MS_PER_DAY) }));
@@ -621,7 +633,7 @@ function renderPendPanel(store) {
   if (!pendOpen) return;
   const pc = (store.pendingClose || []).filter(p => cohort === "all" || (p.types || []).includes(cohort));
   el.innerHTML = `<div class="row-h" style="margin-bottom:4px"><div><h3 style="font-size:13px">WENT LIVE, NOT CLOSED OUT</h3><p class="ch-sub">waiting for the stage move in HubSpot · longest wait first · as of the latest import</p></div><span><button class="btn" id="pendCopy">Copy list</button> <button class="btn" id="pendClose">Close</button></span></div>`
-    + (pc.length ? pc.map(p => `<div class="pend-row"><span class="pn" title="${p.name}">${p.name}</span><span class="pm">${p.stage}</span><span class="pm">went live ${fmtDay(p.live)}</span><span class="pm">${p.days}d waiting</span></div>`).join("")
+    + (pc.length ? pc.map(p => `<div class="pend-row"><span class="pn" title="${escHtml(p.name)}">${escHtml(p.name)}</span><span class="pm">${escHtml(p.stage)}</span><span class="pm">went live ${fmtDay(p.live)}</span><span class="pm">${p.days}d waiting</span></div>`).join("")
                  : `<div style="color:var(--hint);padding:14px 0">No one is waiting on close-out.</div>`);
   const x = document.getElementById("pendClose"); if (x) x.addEventListener("click", () => { pendOpen = false; renderPendPanel(loadStore()); });
   const cp = document.getElementById("pendCopy"); if (cp) cp.addEventListener("click", () => {
@@ -656,7 +668,7 @@ function renderDrill(eng, stage) {                        // named records waiti
   box.classList.remove("hidden");
   box.innerHTML = `<div class="drill-h">WAITING IN ${stage.toUpperCase()} · ${items.length} implementation${items.length === 1 ? "" : "s"} · oldest first</div>`
     + `<div class="drill-list">` + items.map(i =>
-      `<div class="pend-row"><span class="pn" title="${i.name}">${i.name}</span><span class="pm">${i.product || ""}</span><span class="pm">${i.age}d in stage</span></div>`).join("") + `</div>`;
+      `<div class="pend-row"><span class="pn" title="${escHtml(i.name)}">${escHtml(i.name)}</span><span class="pm">${escHtml(i.product || "")}</span><span class="pm">${i.age}d in stage</span></div>`).join("") + `</div>`;
 }
 
 /* ---------- render ---------- */
@@ -1133,7 +1145,7 @@ function snapshotText(store) {
     `Backlog: ${e.open} open${e.openDelta != null ? ` (${e.openDelta > 0 ? "+" : ""}${e.openDelta} vs last import)` : ""}.`,
     e.topDrags.length ? `${e.concentrationPct}% of the overdue wait sits in: ${drags}.` : `Nothing is overdue.`,
     `Intake ${SNAP_INTAKE[e.intakeState]} (${e.arrivals} in / ${e.departs} done over ${pLabel.toLowerCase()}).`,
-    e.medLead != null ? `${e.goLives} went live, median ${e.medLead} days from PO to live (${SNAP_SPEED[e.speedState]}).` : "",
+    e.medLead != null ? `${e.goLives} went live, median ${e.medLead} days from PO to live (${snapPeriod === "30" ? SNAP_SPEED[e.speedState] : "no matching prior window to compare"}).` : "",
   ].filter(Boolean).join("\n");
 }
 function renderSnapshot() {
@@ -1154,7 +1166,7 @@ function renderSnapshot() {
   const q2 = `<b>${e.open.toLocaleString()}</b> open` + (e.openDelta == null ? "" : ` <span class="${e.openDelta > 0 ? "sa-up" : "sa-dn"}">${e.openDelta > 0 ? "▲ +" : "▼ "}${e.openDelta}</span> <span class="sa-sub">vs last import</span>`);
   const q3 = `<b>${e.arrivals}</b> in / <b>${e.departs}</b> done <span class="sa-sub">· ${SNAP_INTAKE[e.intakeState]}</span>`;
   const q4 = e.medLead == null ? `<b>—</b> <span class="sa-sub">no completed go-lives with a PO date in this window</span>`
-    : `median <b>${e.medLead}d</b> to live <span class="sa-sub">· ${e.goLives} went live · ${SNAP_SPEED[e.speedState]}</span>`;
+    : `median <b>${e.medLead}d</b> to live <span class="sa-sub">· ${e.goLives} went live · ${snapPeriod === "30" ? SNAP_SPEED[e.speedState] : "no matching prior window to compare"}</span>`;
   const dragRows = e.topDrags.length ? e.topDrags.map((d, i) => {
     const f = v.focusRows.find(x => x.stage === d.stage) || {};
     return `<div class="pend-row"><span class="pn"><span class="sd-rank">${i + 1}</span>${d.stage}</span><span class="pm"><span class="pill ${f.owner === "customer" ? "warn" : "flat"}">${f.owner === "customer" ? "customer" : "our team"}</span></span><span class="pm">${d.excess.toLocaleString()} overdue-days</span></div>`;
@@ -1194,7 +1206,7 @@ function renderHistory() {
   const arr = loadImports();
   document.getElementById("histList").innerHTML = arr.length ? arr.map((e, i) => `
     <div class="hist-row">
-      <div class="hf" title="${e.fileName}">${e.fileName}${i === 0 ? ' <span class="pill flat" style="margin-left:6px">latest</span>' : ""}${e.older ? ' <span class="pill flat" style="margin-left:6px">older file · kept the newer data</span>' : ""}${/\(demo\)/.test(e.fileName) ? ' <span class="pill flat" style="margin-left:6px">sample data · not an import</span>' : ""}${i > 0 && arr.slice(0, i).some(x => x.snapMonth === e.snapMonth) ? ' <span class="pill flat" style="margin-left:6px">replaced</span>' : ""}</div>
+      <div class="hf" title="${escHtml(e.fileName)}">${escHtml(e.fileName)}${i === 0 ? ' <span class="pill flat" style="margin-left:6px">latest</span>' : ""}${e.older ? ' <span class="pill flat" style="margin-left:6px">older file · kept the newer data</span>' : ""}${/\(demo\)/.test(e.fileName) ? ' <span class="pill flat" style="margin-left:6px">sample data · not an import</span>' : ""}${i > 0 && arr.slice(0, i).some(x => x.snapMonth === e.snapMonth) ? ' <span class="pill flat" style="margin-left:6px">replaced</span>' : ""}</div>
       <div class="hm hdate">${fmtDateTime(e.importedAt)}</div>
       <div class="hm">counts as ${fmtMonth(e.snapMonth)} · ${e.records.toLocaleString()} implementations</div>
       <div class="ha">
@@ -1218,8 +1230,8 @@ function previewImport(i) {
   const shown = rows.slice(0, 50);
   document.getElementById("hpTitle").textContent = e.fileName;
   document.getElementById("hpSub").textContent = `Imported ${fmtDateTime(e.importedAt)} · counts as ${fmtMonth(e.snapMonth)} · showing ${shown.length} of ${rows.length.toLocaleString()} rows`;
-  document.getElementById("hpTable").innerHTML = `<table class="htable"><thead><tr>${cols.map(c => `<th>${c}</th>`).join("")}</tr></thead>
-    <tbody>${shown.map(r => `<tr>${cols.map(c => `<td>${(r[c] || "").slice(0, 60)}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
+  document.getElementById("hpTable").innerHTML = `<table class="htable"><thead><tr>${cols.map(c => `<th>${escHtml(c)}</th>`).join("")}</tr></thead>
+    <tbody>${shown.map(r => `<tr>${cols.map(c => `<td>${escHtml((r[c] || "").slice(0, 60))}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
   const pv = document.getElementById("histPreview");
   pv.classList.remove("hidden"); pv.dataset.idx = i;
   pv.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1399,11 +1411,14 @@ function init() {
     const matches = imps.some(e => e.snapMonth === s0.lastImport.month && e.records === s0.lastImport.records);
     if (imps.length && matches) { (async () => { try {
       const wasDemo = !!s0.demo;
+      const fp = s0.lastImport && s0.lastImport.when;
       let rebuilt = blankStore();
       for (const e of [...imps].sort((a, b) => (a.snapMonth || "").localeCompare(b.snapMonth || ""))) {
         const rows = parseCSV(e.csv);
         rebuilt = await applyImport(rebuilt, normalize(rows), e.snapMonth, toEngineRecords(rows), e.fileName);
       }
+      const cur = loadStore().lastImport;
+      if ((cur && cur.when) !== fp) return;               // a newer import landed mid-replay — keep it
       rebuilt.demo = wasDemo;
       saveStore(rebuilt); render(rebuilt);                 // re-render once healed
     } catch (e) { } })(); }

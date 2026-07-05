@@ -13,7 +13,7 @@ export function initEngine() {
     const db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING), worker);
     await db.instantiate(new URL("./vendor/duckdb/duckdb-eh.wasm", import.meta.url).href);
     const conn = await db.connect();
-    const text = await (await fetch("engine.sql")).text();
+    const text = await (await fetch("engine.sql?v=35")).text();   // keep ?v in step with app.js?v= in index.html (GitHub Pages caches ~10min)
     // strip -- comments, split on ';' (no semicolons inside the recipe's string literals)
     const stmts = text.split("\n").map(l => l.split("--")[0]).join("\n")
       .split(";").map(s => s.trim()).filter(Boolean);
@@ -45,7 +45,7 @@ const THRESH = [["focusCap","focus_cap"],["concentrationTopN","concentration_top
   ["ageImplausibleAbs","age_implausible_abs"],["ageImplausibleMult","age_implausible_mult"],
   ["collapseN","collapse_n"],["stagnationDays","stagnation_days"],["productMinN","product_min_n"],["windowDays","window_days"]];
 
-export async function buildDashboardDb(records, cfg, now, periodStart, prev) {
+async function runDashboard(records, cfg, now, periodStart, prev) {
   const { db, conn, stmts } = await initEngine();
   // ---- feed typed tables (JSON in, columns declared — SQL never parses dates) ----
   const recRows = records.map((r, i) => ({ rid: i, id: r.id ?? "", name: r.name ?? "", product: r.product ?? "",
@@ -105,6 +105,16 @@ export async function buildDashboardDb(records, cfg, now, periodStart, prev) {
   const snapshot = { recordCount: records.length, openTotal: eb.open_total, totalExcess: eb.total_excess,
     medLead: eb.med_lead, byStage: Object.fromEntries(table.map(r => [r.stage, { wip: r.wip }])) };
   return { view, items, snapshot };
+}
+
+// One run at a time: the shim shares a single DuckDB connection, and a run is
+// many awaited statements (table loads + recipe + reads). Interleaved runs
+// would compute view models from cross-contaminated tables — so calls queue.
+let chain = Promise.resolve();
+export function buildDashboardDb(records, cfg, now, periodStart, prev) {
+  const run = chain.catch(() => {}).then(() => runDashboard(records, cfg, now, periodStart, prev));
+  chain = run;
+  return run;
 }
 
 // Notice sentences live HERE (presentation, spec §10/§14.5) — but they reproduce
